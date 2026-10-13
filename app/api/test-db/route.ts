@@ -1,7 +1,9 @@
-import { supabase } from "../../../lib/supabase";
+import { getSupabaseAdmin } from "../../../lib/supabase-server";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  const supabase = getSupabaseAdmin();
+
   const { data, error } = await supabase
     .from("plans")
     .select("*");
