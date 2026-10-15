@@ -32,8 +32,11 @@ type ReadBodyResult =
   | { ok: true; body: Record<string, unknown> }
   | { ok: false; response: NextResponse };
 
+// allowEmpty: true 이면 본문이 아예 비어 있는 요청을 빈 객체({})로 취급한다.
+// (본문이 선택 사항인 API용. 내용이 있는데 JSON이 아니면 여전히 400이다.)
 export async function readJsonObject(
-  request: Request
+  request: Request,
+  options: { allowEmpty?: boolean } = {}
 ): Promise<ReadBodyResult> {
   let bytes: ArrayBuffer;
 
@@ -59,6 +62,10 @@ export async function readJsonObject(
         400
       ),
     };
+  }
+
+  if (options.allowEmpty && text.trim().length === 0) {
+    return { ok: true, body: {} };
   }
 
   let parsed: unknown;
