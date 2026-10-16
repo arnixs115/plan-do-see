@@ -11,6 +11,7 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 |---|---|---|
 | 20261013075100 | `add_update_plan_with_revision` | 계획 수정 + revision 보존을 한 트랜잭션으로 처리하는 함수 `update_plan_with_revision` |
 | 20261014083153 | `add_execution_segments_and_functions` | `execution_segments` 테이블, 부분 유니크 인덱스, 실행 함수 `start_execution` / `pause_execution` / `resume_execution` / `end_execution` / `execution_snapshot` |
+| 20261016004050 | `add_plan_summary` | 계획 대비 실행 결과를 집계하는 읽기 전용 함수 `plan_summary` (통계는 저장하지 않고 요청 때마다 계산) |
 
 ## 사용 규칙
 
