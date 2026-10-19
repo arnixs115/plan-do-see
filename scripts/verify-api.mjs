@@ -110,6 +110,7 @@ try {
   r = await call("POST", `/api/executions/${execId}/end`, { body: { blocker_reason: "막힘, \"시험\"" } });
   check("END 200 ended", r.status === 200 && r.json?.status === "ended", `${r.status} ${r.text.slice(0, 200)}`);
   const workSeconds = r.json?.work_seconds;
+  const endBody = r.json ?? {};
   const endCall = { t0: r.t0, t1: r.t1 };
   // 서버가 잰 작업 시간은 "START 처리 ~ END 처리" 사이에서 일시정지 시간을 뺀 값이다.
   // 요청이 서버에 닿은 정확한 시각은 모르니(dev 서버는 첫 호출 때 컴파일하느라 느리다),
@@ -122,6 +123,23 @@ try {
   const SLACK = 1; // work_seconds는 반올림된 정수라 ±1초 여유
   console.log(`      (참고) 허용 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}초, 서버 측정 ${workSeconds}초, 정지 구간 약 ${(resumeCall.t0 - pauseCall.t1).toFixed(1)}초`);
   check("작업 시간이 클라이언트가 잰 범위 안 (일시정지 시간 제외)", workSeconds >= lo - SLACK && workSeconds <= hi + SLACK && workSeconds >= 3, `work_seconds=${workSeconds}, 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}`);
+
+  // 네트워크 지연과 무관한 확인: END 응답에 들어 있는 구간(segments)의 DB 시각만으로 검산한다.
+  //  - 구간 2개(START~PAUSE, RESUME~END)를 모두 닫았고, 구간 길이의 합 = work_seconds
+  //  - 두 구간 사이의 간격(일시정지)은 우리가 잔 1.5초 이상이고, 작업 시간 = 전체 기간 - 정지 간격
+  {
+    const segs = endBody.segments ?? [];
+    const ms = (v) => Date.parse(v);
+    const closed = segs.length === 2 && segs.every((x) => x.ended_at);
+    const segSum = closed ? segs.reduce((a, x) => a + (ms(x.ended_at) - ms(x.started_at)) / 1000, 0) : NaN;
+    check("구간 2개 모두 닫힘, 구간 길이의 합 = work_seconds", closed && Math.abs(segSum - workSeconds) <= 1, `segments=${segs.length}, 합=${segSum}, work_seconds=${workSeconds}`);
+    if (closed) {
+      const gap = (ms(segs[1].started_at) - ms(segs[0].ended_at)) / 1000;
+      const span = (ms(segs[1].ended_at) - ms(segs[0].started_at)) / 1000;
+      console.log(`      (참고) DB 시각 기준 전체 ${span.toFixed(1)}초 = 작업 ${segSum.toFixed(1)}초 + 정지 ${gap.toFixed(1)}초`);
+      check("일시정지 간격 ≥ 1.4초이고 작업 시간에 포함되지 않음 (작업 = 전체 - 정지)", gap >= 1.4 && Math.abs(span - gap - workSeconds) <= 1, `gap=${gap.toFixed(2)}, span=${span.toFixed(2)}, work=${workSeconds}`);
+    }
+  }
 
   r = await call("POST", `/api/executions/${execId}/end`);
   check("END 재요청 200 changed:false", r.status === 200 && r.json?.changed === false, `${r.status} ${r.text.slice(0, 120)}`);
