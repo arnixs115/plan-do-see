@@ -21,15 +21,20 @@ function check(name, ok, detail = "") {
 }
 
 async function call(method, path, { body, headers = {}, raw = false } = {}) {
+  const t0 = performance.now() / 1000;
   const res = await fetch(BASE + path, {
     method,
     headers: { ...(body !== undefined ? { "Content-Type": "application/json; charset=utf-8" } : {}), ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const text = await res.text();
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const t1 = performance.now() / 1000;
+  // res.text()는 UTF-8 BOM을 자동으로 제거하므로, BOM은 바이트로 직접 확인한다.
+  const bom = buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+  const text = new TextDecoder("utf-8").decode(buf);
   let json = null;
   if (!raw) { try { json = JSON.parse(text); } catch {} }
-  return { status: res.status, json, text, type: res.headers.get("content-type") ?? "", res };
+  return { status: res.status, json, text, bom, t0, t1, type: res.headers.get("content-type") ?? "", res };
 }
 
 // CSV 한 줄 단위 파서(따옴표 안의 쉼표·줄바꿈 처리)
@@ -76,6 +81,7 @@ try {
   r = await call("POST", `/api/todos/${todoId}/executions`, { headers: { "Idempotency-Key": KEY } });
   check("START 201", r.status === 201 && r.json?.status === "running", `${r.status} ${r.text.slice(0, 200)}`);
   execId = r.json?.execution?.id;
+  const startCall = { t0: r.t0, t1: r.t1 };
 
   r = await call("POST", `/api/todos/${todoId}/executions`, { headers: { "Idempotency-Key": KEY } });
   check("START 같은 키 재요청 200 (새로 만들지 않음)", r.status === 200 && r.json?.execution?.id === execId, `${r.status}`);
@@ -90,6 +96,7 @@ try {
   r = await call("POST", `/api/executions/${execId}/pause`);
   check("PAUSE 200 paused", r.status === 200 && r.json?.status === "paused", `${r.status} ${r.text.slice(0, 200)}`);
   const afterPause = r.json?.work_seconds;
+  const pauseCall = { t0: r.t0, t1: r.t1 };
 
   await sleep(1500); // 일시정지 시간: 작업 시간에서 빠져야 한다
   r = await call("GET", `/api/executions/${execId}`);
@@ -97,12 +104,24 @@ try {
 
   r = await call("POST", `/api/executions/${execId}/resume`);
   check("RESUME 200 running", r.status === 200 && r.json?.status === "running", `${r.status} ${r.text.slice(0, 200)}`);
+  const resumeCall = { t0: r.t0, t1: r.t1 };
 
   await sleep(2000);
   r = await call("POST", `/api/executions/${execId}/end`, { body: { blocker_reason: "막힘, \"시험\"" } });
   check("END 200 ended", r.status === 200 && r.json?.status === "ended", `${r.status} ${r.text.slice(0, 200)}`);
   const workSeconds = r.json?.work_seconds;
-  check("작업 시간 ≈ 4초 (정지 1.5초 제외, 3~6초 허용)", workSeconds >= 3 && workSeconds <= 6, `work_seconds=${workSeconds}`);
+  const endCall = { t0: r.t0, t1: r.t1 };
+  // 서버가 잰 작업 시간은 "START 처리 ~ END 처리" 사이에서 일시정지 시간을 뺀 값이다.
+  // 요청이 서버에 닿은 정확한 시각은 모르니(dev 서버는 첫 호출 때 컴파일하느라 느리다),
+  // 클라이언트가 잰 요청/응답 시각으로 가능한 범위를 계산해 그 안에 있는지 본다.
+  //   최소 = (END 요청 - START 응답) - (RESUME 응답 - PAUSE 요청)
+  //   최대 = (END 응답 - START 요청) - (RESUME 요청 - PAUSE 응답)
+  // 일시정지 시간이 작업 시간에 섞여 들어가면 최대값을 넘어서 FAIL이 된다.
+  const lo = endCall.t0 - startCall.t1 - (resumeCall.t1 - pauseCall.t0);
+  const hi = endCall.t1 - startCall.t0 - (resumeCall.t0 - pauseCall.t1);
+  const SLACK = 1; // work_seconds는 반올림된 정수라 ±1초 여유
+  console.log(`      (참고) 허용 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}초, 서버 측정 ${workSeconds}초, 정지 구간 약 ${(resumeCall.t0 - pauseCall.t1).toFixed(1)}초`);
+  check("작업 시간이 클라이언트가 잰 범위 안 (일시정지 시간 제외)", workSeconds >= lo - SLACK && workSeconds <= hi + SLACK && workSeconds >= 3, `work_seconds=${workSeconds}, 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}`);
 
   r = await call("POST", `/api/executions/${execId}/end`);
   check("END 재요청 200 changed:false", r.status === 200 && r.json?.changed === false, `${r.status} ${r.text.slice(0, 120)}`);
@@ -122,7 +141,7 @@ try {
   if (r.status === 404 && !r.type.includes("text/csv") && !r.text.includes("계획을 찾을 수 없습니다")) {
     console.log("SKIP  export 라우트 없음 (export 패치 미적용)");
   } else {
-    check("export(todos) 200 text/csv + BOM", r.status === 200 && r.type.includes("text/csv") && r.text.charCodeAt(0) === 0xfeff, `${r.status} ${r.type}`);
+    check("export(todos) 200 text/csv + BOM", r.status === 200 && r.type.includes("text/csv") && r.bom, `${r.status} ${r.type} bom=${r.bom}`);
     const rows = parseCsv(r.text);
     const h = rows[0] ?? [], ix = (k) => h.indexOf(k);
     check("export(todos) 헤더+1행", rows.length === 2 && rows[1].length === h.length, `rows=${rows.length}`);
