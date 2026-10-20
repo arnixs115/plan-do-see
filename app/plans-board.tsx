@@ -1,15 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
 import { formatMinutes, formatPeriod } from "@/lib/format";
+import { PRIORITY_LABEL } from "@/lib/labels";
 import type { Plan, Priority } from "@/lib/types";
-
-const PRIORITY_LABEL: Record<Priority, string> = {
-  high: "높음",
-  medium: "보통",
-  low: "낮음",
-};
 
 // 우선순위는 왼쪽 선의 색으로 보여 주고, 색만으로 구분하지 않도록 글자도 함께 쓴다.
 const PRIORITY_RULE: Record<Priority, string> = {
@@ -163,7 +159,11 @@ export default function PlansBoard() {
                   className={`border-l-4 px-5 py-4 ${PRIORITY_RULE[plan.priority]}`}
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <h3 className="text-lg font-semibold break-words">{plan.title}</h3>
+                    <h3 className="text-lg font-semibold break-words">
+                      <Link href={`/plans/${plan.id}`} className="hover:underline">
+                        {plan.title}
+                      </Link>
+                    </h3>
                     <span className="text-sm text-muted">
                       우선순위 {PRIORITY_LABEL[plan.priority]}
                     </span>

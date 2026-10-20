@@ -16,3 +16,20 @@ export type Plan = {
   created_at: string;
   updated_at: string;
 };
+
+export type TodoStatus = "todo" | "in_progress" | "completed";
+
+export type Todo = {
+  id: string;
+  plan_id: string;
+  title: string;
+  description: string;
+  due_date: string | null; // "YYYY-MM-DD"
+  priority: Priority;
+  tags: string[];
+  estimated_minutes: number;
+  status: TodoStatus;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
