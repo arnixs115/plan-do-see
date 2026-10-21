@@ -58,3 +58,28 @@ export type ExecutionResult = {
   work_seconds: number;
   execution: { id: string };
 };
+
+// GET /api/plans/{id}/summary 응답 (계획 대비 실제 결과, See 화면용)
+export type PlanSummary = {
+  revision_count: number;
+  todo_counts: { total: number; todo: number; in_progress: number; completed: number };
+  // 0~1 사이 값. 할 일이 하나도 없으면 null
+  completion_rate: number | null;
+  estimated_minutes: { plan: number; todos: number };
+  actual: {
+    execution_count: number;
+    active_execution_count: number;
+    work_seconds: number;
+    work_minutes: number;
+  };
+  todos: {
+    id: string;
+    title: string;
+    status: TodoStatus;
+    estimated_minutes: number;
+    execution_count: number;
+    active_execution_count: number;
+    work_seconds: number;
+    work_minutes: number;
+  }[];
+};

@@ -31,7 +31,14 @@ function toLive(result: ExecutionResult): LiveExecution | null {
   };
 }
 
-export default function TodoSection({ planId }: { planId: string }) {
+export default function TodoSection({
+  planId,
+  onChanged,
+}: {
+  planId: string;
+  // 할 일이나 실행이 바뀐 뒤 부른다. (결과 요약을 다시 불러오는 데 쓴다)
+  onChanged: () => void;
+}) {
   const [todos, setTodos] = useState<TodoView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -87,6 +94,7 @@ export default function TodoSection({ planId }: { planId: string }) {
     });
 
     setTodos((prev) => [...(prev ?? []), toView(todo)]);
+    onChanged();
   }
 
   async function updateTodo(id: string, body: Record<string, unknown>) {
@@ -96,6 +104,7 @@ export default function TodoSection({ planId }: { planId: string }) {
     });
 
     replaceTodo(todo);
+    onChanged();
   }
 
   async function changeStatus(id: string, status: TodoStatus) {
@@ -119,6 +128,7 @@ export default function TodoSection({ planId }: { planId: string }) {
 
     try {
       await action();
+      onChanged();
     } catch (e) {
       setRowError({ id, message: e instanceof ApiError ? e.message : "요청을 처리하지 못했습니다." });
 
@@ -187,6 +197,7 @@ export default function TodoSection({ planId }: { planId: string }) {
       await api<void>(`/api/todos/${id}`, { method: "DELETE" });
       setTodos((prev) => prev?.filter((t) => t.id !== id) ?? prev);
       setConfirmingId(null);
+      onChanged();
     } catch (e) {
       setRowError({ id, message: e instanceof ApiError ? e.message : "삭제하지 못했습니다." });
     } finally {

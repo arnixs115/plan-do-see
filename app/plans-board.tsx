@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ExportLinks from "./export-links";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
 import { formatMinutes, formatPeriod } from "@/lib/format";
@@ -121,10 +122,13 @@ export default function PlansBoard() {
   return (
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
       <section aria-labelledby="plans-heading">
-        <h2 id="plans-heading" className="mb-4 text-xl font-semibold">
-          내 계획
-          {plans && <span className="ml-2 text-base font-normal text-muted">{plans.length}개</span>}
-        </h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="plans-heading" className="text-xl font-semibold">
+            내 계획
+            {plans && <span className="ml-2 text-base font-normal text-muted">{plans.length}개</span>}
+          </h2>
+          <ExportLinks basePath="/api/export" scope="전체" />
+        </div>
 
         {loadError ? (
           <div role="alert" className="rounded-md border border-line bg-surface p-5">

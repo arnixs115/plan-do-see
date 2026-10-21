@@ -7,6 +7,7 @@ import { PRIORITY_LABEL } from "@/lib/labels";
 import type { Plan } from "@/lib/types";
 import { secondaryButton } from "@/app/ui-classes";
 import PlanEditForm from "./plan-edit-form";
+import SummarySection from "./summary-section";
 import TodoSection from "./todo-section";
 
 type LoadError = { message: string; status: number };
@@ -17,6 +18,9 @@ export default function PlanDetail({ planId }: { planId: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // 할 일·실행·계획이 바뀔 때마다 올려서 결과 요약을 다시 불러오게 한다.
+  const [summaryKey, setSummaryKey] = useState(0);
+  const refreshSummary = () => setSummaryKey((key) => key + 1);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +83,7 @@ export default function PlanDetail({ planId }: { planId: string }) {
             onSaved={(updated, revisionNo) => {
               setPlan(updated);
               setEditing(false);
+              refreshSummary();
               setNotice(`수정했습니다. 이전 내용은 수정 이력 ${revisionNo}번으로 보존되었습니다.`);
             }}
           />
@@ -125,7 +130,9 @@ export default function PlanDetail({ planId }: { planId: string }) {
         )}
       </section>
 
-      <TodoSection planId={planId} />
+      <SummarySection planId={planId} refreshKey={summaryKey} />
+
+      <TodoSection planId={planId} onChanged={refreshSummary} />
     </div>
   );
 }
