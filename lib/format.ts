@@ -23,3 +23,27 @@ export function formatPeriod(start: string | null, end: string | null): string |
   if (end) return `${formatDate(end)}까지`;
   return null;
 }
+
+// 초 → 타이머 표기: "04:07", "1:02:03"
+export function formatClock(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+// 초 → 읽기 쉬운 길이: "45초", "12분 30초", "1시간 2분"
+export function formatDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (h > 0) return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+  if (m > 0) return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+  return `${s}초`;
+}

@@ -92,6 +92,12 @@ try {
   r = await call("POST", `/api/todos/${todoId}/executions`);
   check("START Idempotency-Key 없음 → 400", r.status === 400, `${r.status}`);
 
+  // 목록 API의 진행 중 실행(active_execution)과, 시작하면 할 일 상태가 in_progress로 바뀌는 연동
+  r = await call("GET", `/api/plans/${planId}/todos`);
+  const listed = Array.isArray(r.json) ? r.json.find((t) => t.id === todoId) : null;
+  check("목록 API에 active_execution(running)", listed?.active_execution?.id === execId && listed.active_execution.status === "running", `${r.status} ${JSON.stringify(listed?.active_execution)}`);
+  check("START 후 할 일 상태 in_progress", listed?.status === "in_progress", `status=${listed?.status} (연동 SQL을 아직 적용하지 않았다면 정상입니다)`);
+
   await sleep(2000);
   r = await call("POST", `/api/executions/${execId}/pause`);
   check("PAUSE 200 paused", r.status === 200 && r.json?.status === "paused", `${r.status} ${r.text.slice(0, 200)}`);
@@ -122,6 +128,12 @@ try {
   const SLACK = 1; // work_seconds는 반올림된 정수라 ±1초 여유
   console.log(`      (참고) 허용 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}초, 서버 측정 ${workSeconds}초, 정지 구간 약 ${(resumeCall.t0 - pauseCall.t1).toFixed(1)}초`);
   check("작업 시간이 클라이언트가 잰 범위 안 (일시정지 시간 제외)", workSeconds >= lo - SLACK && workSeconds <= hi + SLACK && workSeconds >= 3, `work_seconds=${workSeconds}, 범위 ${lo.toFixed(1)}~${hi.toFixed(1)}`);
+
+  // 종료하면 진행 중 실행이 사라지고 할 일 상태가 completed로 바뀌는 연동
+  r = await call("GET", `/api/plans/${planId}/todos`);
+  const afterEnd = Array.isArray(r.json) ? r.json.find((t) => t.id === todoId) : null;
+  check("END 후 active_execution 없음(null)", afterEnd?.active_execution === null, JSON.stringify(afterEnd?.active_execution));
+  check("END 후 할 일 상태 completed", afterEnd?.status === "completed", `status=${afterEnd?.status} (연동 SQL을 아직 적용하지 않았다면 정상입니다)`);
 
   r = await call("POST", `/api/executions/${execId}/end`);
   check("END 재요청 200 changed:false", r.status === 200 && r.json?.changed === false, `${r.status} ${r.text.slice(0, 120)}`);

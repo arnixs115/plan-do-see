@@ -1,15 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
-import { formatDate, formatMinutes } from "@/lib/format";
+import { formatDate, formatDuration, formatMinutes } from "@/lib/format";
 import { PRIORITY_LABEL, STATUS_LABEL, STATUSES } from "@/lib/labels";
-import type { Todo, TodoStatus } from "@/lib/types";
+import type { ExecutionResult, LiveExecution, Todo, TodoStatus, TodoView } from "@/lib/types";
 import { dangerButton, inputClass, secondaryButton } from "@/app/ui-classes";
+import ExecutionControls from "./execution-controls";
 import TodoForm from "./todo-form";
 
+// API가 준 할 일에 "화면용 진행 중 실행(받은 시각 포함)"을 붙인다.
+function toView(todo: Todo): TodoView {
+  const { active_execution, ...rest } = todo;
+
+  return {
+    ...rest,
+    live: active_execution ? { ...active_execution, receivedAt: Date.now() } : null,
+  };
+}
+
+// 실행 API 결과 → 화면용 진행 중 실행 (끝났으면 null)
+function toLive(result: ExecutionResult): LiveExecution | null {
+  if (result.status === "ended") return null;
+
+  return {
+    id: result.execution.id,
+    status: result.status,
+    work_seconds: result.work_seconds,
+    receivedAt: Date.now(),
+  };
+}
+
 export default function TodoSection({ planId }: { planId: string }) {
-  const [todos, setTodos] = useState<Todo[] | null>(null);
+  const [todos, setTodos] = useState<TodoView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -17,13 +40,17 @@ export default function TodoSection({ planId }: { planId: string }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [rowNotice, setRowNotice] = useState<{ id: string; message: string } | null>(null);
+
+  // 같은 시작 요청을 다시 보낼 때(더블 클릭, 재시도) 같은 키를 쓰려고 성공할 때까지 보관한다.
+  const startKeys = useRef(new Map<string, string>());
 
   useEffect(() => {
     let cancelled = false;
 
     api<Todo[]>(`/api/plans/${planId}/todos`)
       .then((data) => {
-        if (!cancelled) setTodos(data);
+        if (!cancelled) setTodos(data.map(toView));
       })
       .catch((e) => {
         if (!cancelled) {
@@ -41,8 +68,16 @@ export default function TodoSection({ planId }: { planId: string }) {
     setReloadKey((key) => key + 1);
   }
 
+  // 수정 응답에는 active_execution이 없으므로, 기존 화면 값(live)은 그대로 두고 나머지만 덮어쓴다.
   function replaceTodo(updated: Todo) {
-    setTodos((prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? prev);
+    const { active_execution: _ignored, ...fields } = updated;
+    void _ignored;
+
+    setTodos((prev) => prev?.map((t) => (t.id === updated.id ? { ...t, ...fields } : t)) ?? prev);
+  }
+
+  function setLive(id: string, live: LiveExecution | null) {
+    setTodos((prev) => prev?.map((t) => (t.id === id ? { ...t, live } : t)) ?? prev);
   }
 
   async function createTodo(body: Record<string, unknown>) {
@@ -51,7 +86,7 @@ export default function TodoSection({ planId }: { planId: string }) {
       body: JSON.stringify(body),
     });
 
-    setTodos((prev) => [...(prev ?? []), todo]);
+    setTodos((prev) => [...(prev ?? []), toView(todo)]);
   }
 
   async function updateTodo(id: string, body: Record<string, unknown>) {
@@ -74,6 +109,74 @@ export default function TodoSection({ planId }: { planId: string }) {
     } finally {
       setBusyId(null);
     }
+  }
+
+  // 실행 동작 하나를 수행하는 공통 틀: 처리 중 표시, 오류 표시
+  async function runExecution(id: string, action: () => Promise<void>) {
+    setBusyId(id);
+    setRowError(null);
+    setRowNotice(null);
+
+    try {
+      await action();
+    } catch (e) {
+      setRowError({ id, message: e instanceof ApiError ? e.message : "요청을 처리하지 못했습니다." });
+
+      // 이미 진행 중이었던 경우 등, 화면이 서버와 어긋났을 수 있으니 다시 불러온다.
+      if (e instanceof ApiError && e.status === 409) setReloadKey((key) => key + 1);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function startExecution(id: string) {
+    return runExecution(id, async () => {
+      const key = startKeys.current.get(id) ?? crypto.randomUUID();
+      startKeys.current.set(id, key);
+
+      const result = await api<ExecutionResult>(`/api/todos/${id}/executions`, {
+        method: "POST",
+        headers: { "Idempotency-Key": key },
+      });
+
+      startKeys.current.delete(id);
+      setLive(id, toLive(result));
+      // 시작하면 할 일 상태가 '진행 중'으로 바뀌므로 서버의 값으로 다시 불러온다.
+      setReloadKey((k) => k + 1);
+    });
+  }
+
+  function stepExecution(todo: TodoView, step: "pause" | "resume") {
+    return runExecution(todo.id, async () => {
+      if (!todo.live) return;
+
+      const result = await api<ExecutionResult>(`/api/executions/${todo.live.id}/${step}`, {
+        method: "POST",
+      });
+
+      setLive(todo.id, toLive(result));
+    });
+  }
+
+  function endExecution(todo: TodoView, blockerReason: string) {
+    return runExecution(todo.id, async () => {
+      if (!todo.live) return;
+
+      const body = blockerReason.trim() ? JSON.stringify({ blocker_reason: blockerReason }) : undefined;
+
+      const result = await api<ExecutionResult>(`/api/executions/${todo.live.id}/end`, {
+        method: "POST",
+        body,
+      });
+
+      setLive(todo.id, null);
+      setRowNotice({
+        id: todo.id,
+        message: `실행을 종료했습니다. 이번 작업 시간은 ${formatDuration(result.work_seconds)}입니다.`,
+      });
+      // 종료하면 할 일 상태가 '완료'로 바뀌므로 서버의 값으로 다시 불러온다.
+      setReloadKey((k) => k + 1);
+    });
   }
 
   async function removeTodo(id: string) {
@@ -139,6 +242,11 @@ export default function TodoSection({ planId }: { planId: string }) {
                   busy={busyId === todo.id}
                   confirming={confirmingId === todo.id}
                   error={rowError?.id === todo.id ? rowError.message : null}
+                  notice={rowNotice?.id === todo.id ? rowNotice.message : null}
+                  onStart={() => startExecution(todo.id)}
+                  onPause={() => stepExecution(todo, "pause")}
+                  onResume={() => stepExecution(todo, "resume")}
+                  onEnd={(blocker) => endExecution(todo, blocker)}
                   onStatus={(status) => changeStatus(todo.id, status)}
                   onEdit={() => {
                     setConfirmingId(null);
@@ -165,10 +273,15 @@ export default function TodoSection({ planId }: { planId: string }) {
 }
 
 type RowProps = {
-  todo: Todo;
+  todo: TodoView;
   busy: boolean;
   confirming: boolean;
   error: string | null;
+  notice: string | null;
+  onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onEnd: (blockerReason: string) => void;
   onStatus: (status: TodoStatus) => void;
   onEdit: () => void;
   onAskDelete: () => void;
@@ -181,6 +294,11 @@ function TodoRow({
   busy,
   confirming,
   error,
+  notice,
+  onStart,
+  onPause,
+  onResume,
+  onEnd,
   onStatus,
   onEdit,
   onAskDelete,
@@ -238,6 +356,21 @@ function TodoRow({
           {error}
         </p>
       )}
+
+      {notice && (
+        <p aria-live="polite" className="mt-2 text-sm text-muted">
+          {notice}
+        </p>
+      )}
+
+      <ExecutionControls
+        todo={todo}
+        busy={busy}
+        onStart={onStart}
+        onPause={onPause}
+        onResume={onResume}
+        onEnd={onEnd}
+      />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {confirming ? (
