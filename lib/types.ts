@@ -4,6 +4,8 @@ export type Priority = "low" | "medium" | "high";
 
 export type Plan = {
   id: string;
+  user_id: string | null; // 소유자. 예시 계획은 null
+  is_example: boolean; // 모든 사용자에게 읽기 전용으로 보이는 예시 계획
   title: string;
   description: string;
   priority: Priority;

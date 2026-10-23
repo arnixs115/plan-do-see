@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { errorResponse, isUuid } from "@/lib/api-utils";
 import { exportCsvResponse, parseExportType } from "@/lib/export";
@@ -13,6 +14,9 @@ export async function GET(
   request: Request,
   { params }: RouteContext
 ) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const { plan_id } = await params;
 
   if (!isUuid(plan_id)) {

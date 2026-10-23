@@ -108,7 +108,8 @@ async function fetchAllRows<T>(
 // 계획이 없으면 { notFound: true }.
 async function loadExportData(
   supabase: SupabaseClient,
-  planId: string | null
+  planId: string | null,
+  ownerId: string | null
 ): Promise<
   | { ok: true; plans: PlanRow[]; todos: TodoRow[] }
   | { ok: false; notFound?: boolean; error?: DbError }
@@ -118,6 +119,9 @@ async function loadExportData(
 
     if (planId) {
       query = query.eq("id", planId);
+    } else if (ownerId) {
+      // 전체 내보내기: 내 계획과 예시 계획만 (ownerId는 Supabase Auth의 uuid)
+      query = query.or(`user_id.eq.${ownerId},is_example.eq.true`);
     }
 
     return query.order("created_at", { ascending: true }).order("id").range(from, to);
@@ -131,26 +135,35 @@ async function loadExportData(
     return { ok: false, notFound: true };
   }
 
-  // 할 일 + 실행 + 구간을 한 번의 조회로 읽는다. (외래 키 관계로 중첩해서 가져옴)
-  const todosResult = await fetchAllRows<TodoRow>((from, to) => {
-    let query = supabase
-      .from("todos")
-      .select(
-        "*, executions(id, started_at, ended_at, actual_minutes, blocker_reason, execution_segments(started_at, ended_at))"
-      );
+  // 할 일 + 실행 + 구간을 읽는다. (외래 키 관계로 중첩해서 가져옴)
+  // 전체 내보내기에서는 위에서 읽은 계획(내 것 + 예시)에 속한 할 일만 읽는다.
+  // 조건에 쓰는 계획 id가 많아질 때 주소가 너무 길어지지 않도록 50개씩 나눠 읽는다.
+  const planIds = planId ? [planId] : plansResult.rows.map((plan) => plan.id);
+  const todos: TodoRow[] = [];
 
-    if (planId) {
-      query = query.eq("plan_id", planId);
+  for (let i = 0; i < planIds.length; i += 50) {
+    const chunk = planIds.slice(i, i + 50);
+
+    const todosResult = await fetchAllRows<TodoRow>((from, to) =>
+      supabase
+        .from("todos")
+        .select(
+          "*, executions(id, started_at, ended_at, actual_minutes, blocker_reason, execution_segments(started_at, ended_at))"
+        )
+        .in("plan_id", chunk)
+        .order("created_at", { ascending: true })
+        .order("id")
+        .range(from, to)
+    );
+
+    if (!todosResult.ok) {
+      return { ok: false, error: todosResult.error };
     }
 
-    return query.order("created_at", { ascending: true }).order("id").range(from, to);
-  });
-
-  if (!todosResult.ok) {
-    return { ok: false, error: todosResult.error };
+    todos.push(...todosResult.rows);
   }
 
-  return { ok: true, plans: plansResult.rows, todos: todosResult.rows };
+  return { ok: true, plans: plansResult.rows, todos };
 }
 
 // ---------------------------------------------------------------------------
@@ -379,9 +392,9 @@ function buildExecutionRows(plans: PlanRow[], todos: TodoRow[], nowMs: number) {
 // 읽기 → CSV 파일 응답. planId가 null이면 전체 계획.
 export async function exportCsvResponse(
   supabase: SupabaseClient,
-  options: { planId: string | null; type: ExportType; label: string }
+  options: { planId: string | null; ownerId?: string; type: ExportType; label: string }
 ) {
-  const loaded = await loadExportData(supabase, options.planId);
+  const loaded = await loadExportData(supabase, options.planId, options.ownerId ?? null);
 
   if (!loaded.ok) {
     if (loaded.notFound) {

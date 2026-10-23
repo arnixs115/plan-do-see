@@ -5,6 +5,7 @@
 //                        node scripts/verify-api.mjs http://localhost:3001
 //
 // 주의: 시험용 계획 1개("[API-TEST] ...")가 DB에 남는다. (계획 삭제 API가 아직 없다)
+//       계획은 시험 계정의 것으로 만들어진다. 로그인 정보 넣는 법은 getAccessToken 위의 설명을 본다.
 //       할 일은 마지막에 soft delete 한다. 비밀 키는 쓰지 않고 HTTP 호출만 한다.
 // Node의 fetch는 항상 UTF-8로 보내므로 Windows 터미널에서도 한글이 깨지지 않는다.
 // 실행 시간 확인 때문에 약 6초가 걸린다.
@@ -20,11 +21,43 @@ function check(name, ok, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `   -> ${detail}`}`);
 }
 
+// 이제 모든 API는 로그인이 필요하다. 시험용 계정(이메일 확인을 마친 계정)으로 로그인해서 받은 토큰을
+// Authorization 헤더로 보낸다. 토큰은 출력하지 않는다.
+//   방법 1) ACCESS_TOKEN=<토큰> node scripts/verify-api.mjs
+//   방법 2) NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, TEST_EMAIL, TEST_PASSWORD 를
+//           환경변수로 주면 이 스크립트가 직접 로그인한다. (비밀번호는 명령 기록에 남으니 시험용 계정만 쓴다)
+async function getAccessToken() {
+  if (process.env.ACCESS_TOKEN) return process.env.ACCESS_TOKEN;
+
+  const { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key, TEST_EMAIL: email, TEST_PASSWORD: password } = process.env;
+
+  if (!url || !key || !email || !password) {
+    console.log("ERROR  로그인 정보가 없습니다. ACCESS_TOKEN, 또는 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / TEST_EMAIL / TEST_PASSWORD 를 환경변수로 주세요.");
+    process.exit(2);
+  }
+
+  const res = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: key },
+    body: JSON.stringify({ email, password }),
+  });
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok || !json.access_token) {
+    console.log(`ERROR  시험 계정으로 로그인하지 못했습니다. (HTTP ${res.status}, ${json.error_code ?? json.error ?? "알 수 없음"})`);
+    process.exit(2);
+  }
+
+  return json.access_token;
+}
+
+const ACCESS_TOKEN = await getAccessToken();
+
 async function call(method, path, { body, headers = {}, raw = false } = {}) {
   const t0 = performance.now() / 1000;
   const res = await fetch(BASE + path, {
     method,
-    headers: { ...(body !== undefined ? { "Content-Type": "application/json; charset=utf-8" } : {}), ...headers },
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, ...(body !== undefined ? { "Content-Type": "application/json; charset=utf-8" } : {}), ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const buf = new Uint8Array(await res.arrayBuffer());

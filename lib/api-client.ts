@@ -38,6 +38,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     // JSON이 아닌 응답이면 아래에서 상태 코드로 메시지를 만든다.
   }
 
+  // 로그인 세션이 없거나 만료된 경우: 로그인 화면으로 보낸다. (자료는 서버가 이미 거절했다)
+  if (response.status === 401 && typeof window !== "undefined") {
+    // 컴포넌트 밖의 공용 함수라 useRouter를 쓸 수 없고, 화면 상태를 모두 버리는 전체 이동이 맞다.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/login";
+  }
+
   if (!response.ok) {
     const error = (data as { error?: string | string[] } | null)?.error;
     const message = Array.isArray(error)

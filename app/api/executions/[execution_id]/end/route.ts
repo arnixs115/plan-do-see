@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { errorResponse, isUuid, readJsonObject } from "@/lib/api-utils";
@@ -22,6 +23,9 @@ export async function POST(
   request: Request,
   { params }: RouteContext
 ) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const { execution_id } = await params;
 
   if (!isUuid(execution_id)) {

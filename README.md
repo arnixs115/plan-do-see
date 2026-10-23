@@ -3,7 +3,7 @@
 계획(Plan)을 세우고, 할 일을 실행(Do)하고, 결과를 확인(See)하는 다이어리의 백엔드 API입니다.
 Next.js(App Router Route Handlers) + TypeScript + Supabase(PostgreSQL)로 만들었고 Vercel에 배포합니다.
 
-> 현재는 **API만** 구현되어 있습니다. `app/page.tsx`는 create-next-app 기본 화면입니다.
+> 계획 목록·상세, 할 일, 실행 타이머, 결과 요약 화면이 있고, 이메일 가입·로그인(Supabase Auth)이 붙어 있습니다. 인증 방식과 설정은 [`docs/auth.md`](docs/auth.md)를 봅니다.
 
 ## 실행하기
 
@@ -19,12 +19,15 @@ npm run dev                  # http://localhost:3000
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 공개되어도 되는 값 |
 | `SUPABASE_SECRET_KEY` | 서버가 DB에 접근하는 비밀 키 | **서버 전용.** `NEXT_PUBLIC_`을 붙이지 않는다 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인(Supabase Auth)용 공개 키 | 공개되도록 만들어진 키. 비밀 키와 다른 값이다 |
 
 `.env*` 파일은 Git에 올라가지 않습니다. 비밀 키는 코드, 로그, 채팅에 붙여넣지 않습니다.
 
 ## API
 
 데이터는 모두 서버 API를 거쳐 접근하고, 브라우저가 Supabase를 직접 호출하지 않습니다.
+
+**모든 API는 로그인이 필요합니다.** 로그인하지 않은 요청은 `401`입니다. (쿠키 세션 또는 `Authorization: Bearer <액세스 토큰>`)
 
 | 영역 | 메서드와 경로 |
 |---|---|
@@ -56,6 +59,14 @@ node scripts/verify-api.mjs http://localhost:3001
 ```
 
 계획·할 일·실행·요약·내보내기를 실제 DB로 한 번씩 거치며 PASS/FAIL을 출력합니다.
+모든 API가 로그인을 요구하므로, 이메일 확인을 마친 **시험용 계정**이 필요합니다. `ACCESS_TOKEN`을 주거나 아래 환경변수로 스크립트가 직접 로그인하게 합니다.
+(비밀번호는 명령 기록에 남으니 시험 전용 계정만 씁니다. 토큰·비밀번호는 출력되지 않습니다.)
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=... NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=... TEST_EMAIL=... TEST_PASSWORD=... node scripts/verify-api.mjs
+```
+
+인증 확인은 `scripts/verify-auth.mjs`(비로그인 차단은 계정 없이, 로그인·로그아웃·세션 폐기는 위 환경변수로)와 `node --test scripts/auth-validation.test.mjs`(입력 검사 단위 시험)를 씁니다.
 **실행할 때마다 `[API-TEST]` 계획이 1개씩 DB에 남습니다.** 끝나면 Supabase SQL Editor에서 지웁니다.
 
 ```sql
@@ -70,11 +81,9 @@ delete from public.plans where title like '[API-TEST]%';
 
 ## 보안 한계 (꼭 읽을 것)
 
-**이 프로젝트에는 로그인이 없습니다.** 모든 API가 인증 없이 열려 있고, 서버는 비밀 키로 DB에 접근합니다.
-배포 주소를 아는 사람은 누구나 다음을 할 수 있습니다.
+로그인이 붙었지만, **로그인한 사용자끼리의 자료 격리는 아직 끝나지 않았습니다.** (과제 7 카드 2에서 진행)
 
-- 계획·할 일·실행 기록을 만들고, 고치고, 지울 수 있습니다.
-- `GET /api/export`로 **전체 데이터를 CSV로 내려받을 수 있습니다.**
-
-따라서 공개되어도 괜찮은 시험·데모 데이터만 넣어야 합니다. 개인적인 내용이나 민감한 정보는 넣지 않습니다.
-실제로 쓰려면 먼저 접근 제한(로그인 또는 토큰 검사)을 추가해야 합니다.
+- 로그인하지 않은 요청은 모든 API에서 `401`이고, 페이지는 로그인 화면으로 이동합니다.
+- 계획 **목록**과 **전체 내보내기**는 내 계획과 예시 계획만 돌려줍니다. 계획을 만들 때 소유자는 로그인한 사용자로 정해집니다.
+- 그러나 **계획·할 일·실행을 id로 직접 부르는 API는 아직 소유자를 확인하지 않습니다.** 가입한 사용자가 다른 사용자의 id를 알면 읽고 고칠 수 있습니다. 예시 계획을 읽기 전용으로 막는 것도 아직 없습니다.
+- 따라서 카드 2가 끝나기 전에는 **가입을 열어 둔 채로 실제 자료를 넣지 않습니다.** 공개되어도 괜찮은 시험·데모 데이터만 씁니다.

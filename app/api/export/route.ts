@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { exportCsvResponse, parseExportType } from "@/lib/export";
 
@@ -5,9 +6,11 @@ import { exportCsvResponse, parseExportType } from "@/lib/export";
 //   ?type=todos       (기본) 할 일 한 개가 한 행. 할 일이 없는 계획도 한 행으로 나온다.
 //   ?type=executions  실행 한 번이 한 행.
 //
-// 주의: 로그인이 없는 초기 버전이라, 이 주소를 아는 사람은 누구나 모든 데이터를 내려받을 수 있다.
-// 외부에 공개하기 전에 접근 제한(예: 비밀 토큰 확인)을 붙여야 한다.
+// 로그인한 사용자의 계획과, 모든 사용자에게 보이는 예시 계획만 내보낸다. (다른 사용자의 계획은 포함되지 않는다)
 export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const parsed = parseExportType(request);
 
   if (!parsed.ok) {
@@ -16,6 +19,7 @@ export async function GET(request: Request) {
 
   return exportCsvResponse(getSupabaseAdmin(), {
     planId: null,
+    ownerId: auth.user.id,
     type: parsed.type,
     label: "GET /api/export",
   });

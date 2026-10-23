@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -19,6 +20,9 @@ export async function GET(
   request: Request,
   { params }: RouteContext
 ) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const { plan_id } = await params;
 
   if (!isUuid(plan_id)) {
@@ -70,6 +74,9 @@ export async function POST(
   request: Request,
   { params }: RouteContext
 ) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const { plan_id } = await params;
 
   if (!isUuid(plan_id)) {
