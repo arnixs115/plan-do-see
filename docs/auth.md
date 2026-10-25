@@ -101,6 +101,43 @@
 - `verify-api.mjs`(기존 32개 확인)를 로그인한 시험 계정으로 다시 실행.
 - 실제 `layout.tsx`로 하는 `next build`, Vercel 배포, 브라우저에서의 쿠키·네트워크 확인.
 
+### 5-3. 카드 2: 비밀번호를 어떻게 맡아 두는지
+
+**결론부터:** 비밀번호 해싱은 우리 코드가 아니라 **Supabase Auth**가 한다. 우리는 해시 저장 구조를 만들지 않았고(`public` 스키마에 비밀번호·해시 열 없음), 비밀번호는 `app/auth/actions.ts` 한 곳에서만 읽어 `supabase.auth.signUp()` / `signInWithPassword()`에 넘기고 버린다.
+
+| 항목 | 내용 | 근거 / 확인 수준 |
+|---|---|---|
+| 서비스 | Supabase Auth (GoTrue 기반), 저장 위치 `auth.users.encrypted_password` | 실제 DB에서 열 확인 (확인함) |
+| 해싱 방식 | bcrypt (비용 10, 형식 `$2a$10$` + 22자 salt + 31자 해시 = 60자) | Supabase 공식 문서 "Password security"는 bcrypt 사용을 밝힌다 (문서 확인). 비용 10·`$2a$`는 Go bcrypt 구현의 기본값에 대한 **2차 자료** 기준이라, **실제 저장값으로는 아직 못 확인** (사용자 0명) |
+| 라이브러리 버전 | 우리가 쓰는 클라이언트: `@supabase/ssr` 0.12.7, `@supabase/supabase-js` 2.117.2 (`package-lock.json`) | 확인함. 이 둘은 비밀번호를 해싱하지 않고 서버로 보내기만 한다 |
+| Auth 서버 버전 | **확인하지 못함** | 샌드박스에서 Supabase Auth에 접속 불가. DB의 `auth` 스키마 마이그레이션은 82개(최신 20260831180000)로 확인했으나 서버 버전은 아님 |
+| 선택 이유 | 직접 구현하지 않고 검증된 서비스에 맡김: 해시 알고리즘·salt·비교 코드를 직접 짜면 실수 위험이 크고, 카드 1에서 이미 Supabase Auth를 선택했다. 무료 플랜에서도 동일하게 동작한다 | 설계 판단 |
+| salt | bcrypt는 해시를 만들 때마다 **무작위 salt 16바이트**를 새로 뽑아 해시 문자열 안에 함께 저장한다. 그래서 같은 비밀번호도 계정마다 다른 해시가 나오고, 로그인 때는 저장된 해시 안의 salt로 다시 계산해 비교한다 | Go `x/crypto/bcrypt` 소스(`crypto/rand`로 salt 생성)와 bcrypt 형식 설명 (문서 확인). GoTrue가 정확히 이 구현을 쓴다는 점은 2차 자료 |
+| 72바이트 | bcrypt는 비밀번호 앞 72바이트만 쓴다. 우리 입력 검사가 72바이트 초과를 거절한다 (`lib/auth/validation.ts`) | 확인함 (단위 시험) |
+
+**API 역할은 해시를 읽을 수 없다.** 실제 DB에서 `anon`, `authenticated`, `service_role` 모두 `auth.users`에 SELECT 권한이 없음을 확인했다. 해시는 SQL Editor(postgres 권한)에서만 볼 수 있다. 점검 SQL은 `db/checks/password-storage.sql`이며, 해시·비밀번호 값은 출력하지 않고 true/false·개수·접두사(알고리즘·비용)만 낸다.
+
+#### 실제로 실행한 것
+| 시험 | 결과 |
+|---|---|
+| 실제 DB 구조: 비밀번호 관련 열 조회 (`db/checks/password-storage.sql` 1번) | `auth.users.encrypted_password` 하나뿐. `public`에는 없음 |
+| 실제 DB: 점검 SQL 2·3번 실행 | 문법·동작은 확인했으나 **`auth.users`가 0행이라 해시 판정은 하지 못함** |
+| 코드 검토: 비밀번호가 읽히는 곳과 로그 | 읽는 곳은 `app/auth/actions.ts` 한 곳. `console.error`는 오류 객체만 찍고 입력값은 안 찍음 |
+| `node --test scripts/check-password-leak.test.mjs` (노출 검사 도구 자체 시험) | 7개 중 7개 통과 (일부러 심은 가짜 비밀번호를 응답 본문·헤더·주소·쿠키·base64·로그에서 잡는지, 비슷한 문자열은 안 잡는지) |
+| 노출 검사 (Playwright 운영 빌드 + **가짜** Auth 서버): 가입, 확인 불일치 가입, 없는 계정 로그인, 확인 링크, 로그아웃, 로그인 성공 | 요청 53개를 HAR로 기록. 요청 본문에만 4번 있고, 요청 주소·헤더·쿠키, 응답 헤더·쿠키·본문, 서버 로그, 화면 HTML, localStorage·sessionStorage·`document.cookie`, 브라우저 콘솔에서 **0건** |
+| 같은 검사, Auth 서버가 꺼진 오류 경로 | 화면에 "인증 서버에 연결하지 못했습니다"만 표시. HAR·서버 로그에 0건 |
+
+#### 실행하지 않은 것 (직접 실행 필요)
+- **실제 Supabase로 만든 동일 비밀번호 두 계정의 저장값 비교** — 현재 `auth.users`가 0행이다. 시험 계정 두 개를 같은 시험용 비밀번호로 가입한 뒤 `db/checks/password-storage.sql` 3번을 실행해야 한다. 기대값: `found_accounts`=2, `distinct_hashes`=2, `distinct_salts`=2, `algorithm_and_cost`=`$2a$10$`, `all_bcrypt_format`=true. 기대와 다르면 그대로 기록한다.
+- **실제 Supabase로 하는 노출 검사** — 위 노출 검사는 가짜 서버 기준이라 실제 Supabase 응답이 비밀번호를 되돌려 주지 않는다는 증명이 아니다. 실제 서비스로 가입·로그인하며 HAR와 서버 로그를 저장해 `TEST_PASSWORD='<시험 비밀번호>' node scripts/check-password-leak.mjs --har 기록.har --log dev-server.log`를 실행해야 한다.
+- Vercel 런타임 로그, Supabase 대시보드의 Auth 로그에 비밀번호가 남는지.
+- Supabase Auth 서버 버전. bcrypt 비용이 `$2a$10$`인지는 위 두 계정 비교(`algorithm_and_cost`)를 실행해야 확인된다.
+
+#### 남은 위험
+- 비밀번호는 로그인·가입 때 **HTTPS 요청 본문**으로 우리 서버(Server Action)를 거쳐 Supabase로 간다. 요청 본문에 있는 것은 정상이며, 우리 서버 프로세스 메모리에는 잠시 원문이 있다. 서버가 침해되면 그 순간의 원문은 노출될 수 있다.
+- 비밀번호 정책은 8자 이상·72바이트 이하뿐이다. 유출된 비밀번호 목록 대조나 시도 횟수 제한은 이 단계에서 다루지 않았다(Supabase Auth의 기본 요청 제한에 의존).
+- bcrypt는 "느린 해시"이지만 약한 비밀번호는 해시가 유출되면 추측될 수 있다. 해시가 안전한 것이 아니라 DB 접근을 막는 것이 먼저다.
+
 ## 6. 아직 구현하지 않은 것 (카드 2 이후)
 - id로 부르는 API(계획·할 일·실행)의 **소유자 확인**과 남의 자료 404.
 - 예시 계획의 읽기 전용(쓰기 403)과 admin의 수정·삭제.

@@ -24,3 +24,9 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 - 새 함수를 만들 때는 Supabase가 기본으로 `anon`, `authenticated`에 실행 권한을 부여하므로, 파일 끝에서 `revoke execute ... from public, anon, authenticated;` 후 `grant execute ... to service_role;`을 반드시 실행합니다.
 - `20261021030000`, `20261022060000`, `20261022060100` 파일은 SQL Editor에서 직접 실행해 적용했기 때문에 Supabase의 마이그레이션 기록(`list_migrations`)에는 없습니다. 버전은 파일 순서를 위해 붙인 값입니다.
 - 이 폴더는 기록용입니다. Supabase에 적용하는 것은 별도 작업(대시보드의 SQL Editor 또는 마이그레이션 도구)입니다.
+
+## checks/
+
+적용이 아니라 **점검**용 SQL입니다. 읽기 전용(SELECT만)이고 SQL Editor에서 직접 실행합니다.
+
+- `password-storage.sql`: 비밀번호 저장 상태 점검(카드 2). `auth.users`의 해시 형식·동일 비밀번호 두 계정 비교를 true/false와 개수로만 보여 주며, 해시와 비밀번호는 출력하지 않습니다.
