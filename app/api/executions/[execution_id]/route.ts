@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizeExecution } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { dbErrorResponse, errorResponse, isUuid } from "@/lib/api-utils";
@@ -23,6 +24,10 @@ export async function GET(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획이거나 예시 계획의 실행만 읽을 수 있다. 남의 것은 없는 것과 같은 404.
+  const access = await authorizeExecution(supabase, auth.user, execution_id, "read", "GET /api/executions/[execution_id]");
+  if (!access.ok) return access.response;
 
   // 없는 실행이면 함수가 null을 돌려준다.
   const { data, error } = await supabase.rpc("execution_snapshot", {

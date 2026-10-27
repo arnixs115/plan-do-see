@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizePlan } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { dbErrorResponse, errorResponse, isUuid } from "@/lib/api-utils";
@@ -61,6 +62,10 @@ export async function GET(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획이거나 예시 계획만 읽을 수 있다. 남의 계획은 없는 것과 같은 404.
+  const access = await authorizePlan(supabase, auth.user, plan_id, "read", "GET /api/plans/[plan_id]/summary");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase.rpc("plan_summary", {
     p_plan_id: plan_id,

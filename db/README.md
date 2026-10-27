@@ -30,3 +30,9 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 적용이 아니라 **점검**용 SQL입니다. 읽기 전용(SELECT만)이고 SQL Editor에서 직접 실행합니다.
 
 - `password-storage.sql`: 비밀번호 저장 상태 점검(카드 2). `auth.users`의 해시 형식·동일 비밀번호 두 계정 비교를 true/false와 개수로만 보여 주며, 해시와 비밀번호는 출력하지 않습니다.
+
+## manual/
+
+손으로 한 번 실행하는 **쓰기** SQL입니다. 앱이나 마이그레이션 도구가 실행하지 않습니다.
+
+- `add-admin.sql`: 예시 계획을 고칠 수 있는 admin 사용자를 `admins` 표에 등록합니다(가입을 마친 계정의 이메일만 바꿔 실행).

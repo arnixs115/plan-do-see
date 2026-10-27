@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizeTodo } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { errorResponse, isUuid } from "@/lib/api-utils";
@@ -38,6 +39,10 @@ export async function POST(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획의 할 일에만 실행을 시작할 수 있다. (예시는 admin만, 남의 것은 404)
+  const access = await authorizeTodo(supabase, auth.user, todo_id, "write", "POST /api/todos/[todo_id]/executions");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase.rpc("start_execution", {
     p_todo_id: todo_id,

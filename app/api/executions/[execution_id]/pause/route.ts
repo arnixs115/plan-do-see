@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizeExecution } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { errorResponse, isUuid } from "@/lib/api-utils";
@@ -29,6 +30,10 @@ export async function POST(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획의 실행만 조작할 수 있다. (예시는 admin만, 남의 것은 404)
+  const access = await authorizeExecution(supabase, auth.user, execution_id, "write", "POST /api/executions/[execution_id]/pause");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase.rpc("pause_execution", {
     p_execution_id: execution_id,

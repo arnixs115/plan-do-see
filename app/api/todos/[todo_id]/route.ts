@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizeTodo } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -32,6 +33,10 @@ export async function GET(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획이거나 예시 계획의 할 일만 읽을 수 있다. 남의 것은 없는 것과 같은 404.
+  const access = await authorizeTodo(supabase, auth.user, todo_id, "read", "GET /api/todos/[todo_id]");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase
     .from("todos")
@@ -84,6 +89,10 @@ export async function PATCH(
 
   const supabase = getSupabaseAdmin();
 
+  // 내 계획의 할 일만 고칠 수 있다. (예시는 admin만, 남의 것은 404)
+  const access = await authorizeTodo(supabase, auth.user, todo_id, "write", "PATCH /api/todos/[todo_id]");
+  if (!access.ok) return access.response;
+
   // DB에 updated_at을 자동 갱신하는 트리거가 없어서 여기서 직접 넣는다.
   const { data, error } = await supabase
     .from("todos")
@@ -118,6 +127,11 @@ export async function DELETE(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획의 할 일만 지울 수 있다. (예시는 admin만, 남의 것은 404)
+  const access = await authorizeTodo(supabase, auth.user, todo_id, "write", "DELETE /api/todos/[todo_id]");
+  if (!access.ok) return access.response;
+
   const now = new Date().toISOString();
 
   const { data, error } = await supabase

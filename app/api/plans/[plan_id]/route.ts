@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizePlan } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -27,6 +28,10 @@ export async function GET(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획이거나 예시 계획만 읽을 수 있다. 남의 계획은 없는 것과 같은 404.
+  const access = await authorizePlan(supabase, auth.user, plan_id, "read", "GET /api/plans/[plan_id]");
+  if (!access.ok) return access.response;
 
   // maybeSingle: 행이 없으면 오류가 아니라 data가 null로 돌아온다.
   // (single()은 행이 없을 때 오류를 내서 "없음"과 "DB 오류"를 구분하기 어렵다.)
@@ -84,6 +89,10 @@ export async function PATCH(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획만 고칠 수 있다. (예시 계획은 admin만, 남의 계획은 404)
+  const access = await authorizePlan(supabase, auth.user, plan_id, "write", "PATCH /api/plans/[plan_id]");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase.rpc("update_plan_with_revision", {
     p_plan_id: plan_id,

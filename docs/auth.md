@@ -189,9 +189,49 @@
 - 로그아웃은 현재 기기 세션만 폐기한다(`scope: "local"`). 다른 기기의 세션은 남는다. 비밀번호 변경·전체 기기 로그아웃 기능이 없어서, 계정이 탈취돼도 다른 세션을 끊을 방법이 앱 안에 없다.
 - Free 플랜에서는 세션의 고정 만료·비활동 만료를 설정할 수 없다. 리프레시 토큰이 유출되면 세션이 로그아웃 전까지 이어질 수 있다.
 
+### 5-5. 카드 4: 남의 자료가 안 열린다
+
+#### 설계와 한계
+- 서버는 비밀 키로 DB에 접근하므로 **RLS는 우리 서버 경로에 적용되지 않는다.** 실제 DB에서 6개 테이블 모두 RLS가 켜져 있고 정책은 0개이며, `anon`·`authenticated`는 테이블을 읽을 수 없다(공개 키가 유출될 때의 방어). 그러나 서버 코드가 확인하지 않으면 아무도 막지 않으므로, **소유권은 서버 코드(아래 소스 위치)가 유일하게 막는다.** RLS가 켜져 있다는 사실을 안전의 근거로 쓰지 않는다.
+- 소유자는 `plans.user_id`뿐이다. 할 일은 `todos.plan_id`, 실행은 `executions.todo_id → todos.plan_id`로 계획을 찾아 계획의 소유자를 본다.
+- 규칙(`lib/auth/access-rules.ts`): 내 계획은 읽기·쓰기 허용 / 예시 계획은 읽기는 모두, 쓰기는 `admins` 표의 사용자만, 그 밖에는 403 / **남의 계획은 읽기·쓰기 모두 404**(없는 자료와 같은 응답이라 존재 여부를 알려 주지 않음). 소유자가 없는 일반 계획도 404.
+- 수정 전에는 `id`로 부르는 API(계획·할 일·실행 단건, 하위 목록, 요약, 내보내기)에 소유자 확인이 없었다. 수정 전 빌드로 같은 시험을 돌려 **재현했다**(가짜 서버 기준 73개 중 36개 통과, 37개 실패: 남의 자료의 읽기·수정·삭제·실행 조작이 모두 성공, 예시 계획도 누구나 쓰기 가능).
+
+#### 소스 위치
+| 역할 | 위치 |
+|---|---|
+| 접근 규칙(순수 함수) | `lib/auth/access-rules.ts` `decideAccess` |
+| 소유권 확인(계획·할 일·실행) | `lib/auth/ownership.ts` `authorizePlan`, `authorizeTodo`, `authorizeExecution` |
+| 소유자 조건이 걸린 DB 쿼리 | `ownership.ts`의 `plans`·`todos`·`executions`·`admins` 조회(`id`로 소유 계획을 찾아 비교). 목록은 `app/api/plans/route.ts`의 `.or("user_id.eq.<로그인 사용자>,is_example.eq.true")`, 생성은 같은 파일의 `.insert({ ...values, user_id: <로그인 사용자> })` |
+| 호출하는 API (`requireUser()` 바로 뒤) | `app/api/plans/[plan_id]/route.ts`(GET·PATCH), `.../todos/route.ts`(GET·POST), `.../summary/route.ts`, `.../export/route.ts`, `app/api/todos/[todo_id]/route.ts`(GET·PATCH·DELETE), `.../executions/route.ts`(POST), `app/api/executions/[execution_id]/route.ts`(GET), `.../pause·resume·end/route.ts` |
+| 소유자·예시·admin 컬럼과 표 | `db/migrations/20261022060000_add_plan_owner_and_admins.sql`, `20261022060100_convert_legacy_plans_to_examples.sql` (RLS 정책은 없음) |
+| admin 등록 | `db/manual/add-admin.sql` (손으로 실행) |
+| 시험 | `scripts/verify-access.mjs`(실제 서비스 대상), `scripts/access-rules.test.mjs`(규칙 단위 시험, 4개) |
+
+#### 실행한 시험 (가짜 Supabase 서버 기준)
+`scripts/verify-access.mjs`를 가짜 Auth·자료 서버와 운영 빌드(`next start`)로 실행했다. **실제 Supabase 증명이 아니다.**
+
+| 시험 | 결과 |
+|---|---|
+| 수정 전 빌드(라우트 10개 파일만 HEAD 버전으로 되돌려 빌드) | 73개 중 36개 통과, 37개 실패 (취약점 재현) |
+| 수정 후 빌드 | 73개 중 73개 통과 |
+| 단위 시험 (`node --test scripts/*.test.mjs`) | 18개 중 18개 통과 |
+| 카드 1 브라우저 시험(`ui-auth-test.cjs`, 수정 후 빌드) | 통과 |
+| `tsc --noEmit`, `eslint` | 오류·경고 없음 |
+
+#### 실행하지 않은 것 (직접 실행 필요)
+- **실제 Supabase로 `node scripts/verify-access.mjs`** (시험 계정 A·B). 아래 결과 칸은 실행 후 채운다.
+- admin 시험: `admins` 표에 시험 계정을 등록해야 한다(`db/manual/add-admin.sql`). 등록하지 않으면 "admin이 예시 계획에 쓸 수 있다"는 확인하지 않은 것이다.
+- 실제 DB에서의 동시 요청(검사와 실행 사이의 경쟁 조건).
+
+#### 남은 위험
+- 소유자 확인과 실제 쓰기가 **서로 다른 쿼리**다. `plans.user_id`는 API로 바꿀 수 없어서 실제 위험은 낮지만, DB 함수에 소유자를 인자로 넘기는 방식보다는 약하다.
+- 자료 한 건에 DB 조회가 1~3번 더 붙는다(할 일 1번, 실행 2번, 계획 1번, 예시 쓰기에서 admin 1번 추가).
+- 실행 시작의 `Idempotency-Key`는 전역이다. 다른 사람이 쓴 키를 보내면 409로 "이미 쓰인 키"임이 드러난다(자료 내용은 새지 않음).
+- 계획 삭제 API가 없어서 계획의 삭제 거절은 시험할 수 없다(할 일 삭제로 대신 확인). 계정 삭제 기능도 없다.
+
 ## 6. 아직 구현하지 않은 것 (카드 2 이후)
-- id로 부르는 API(계획·할 일·실행)의 **소유자 확인**과 남의 자료 404.
-- 예시 계획의 읽기 전용(쓰기 403)과 admin의 수정·삭제.
+- (카드 4에서 구현함: id로 부르는 API의 소유자 확인과 남의 자료 404, 예시 계획의 읽기 전용(쓰기 403)과 admin 쓰기. 실제 Supabase 시험은 5-5절 참고)
 - 계정 삭제와 자료 삭제, 5일 사용 기록.
 - `Idempotency-Key`의 사용자별 분리.
 - 요청마다 `getUser()`로 Auth 서버에 묻는 비용(지연) 점검.

@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { authorizePlan } from "@/lib/auth/ownership";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -30,6 +31,10 @@ export async function GET(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획이거나 예시 계획만 읽을 수 있다. 남의 계획은 없는 것과 같은 404.
+  const access = await authorizePlan(supabase, auth.user, plan_id, "read", "GET /api/plans/[plan_id]/todos");
+  if (!access.ok) return access.response;
 
   // 계획이 없는데 빈 목록을 돌려주면 "할 일이 없음"과 구분되지 않으므로 먼저 확인한다.
   const { data: plan, error: planError } = await supabase
@@ -96,6 +101,10 @@ export async function POST(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 내 계획에만 할 일을 추가할 수 있다. (예시 계획은 admin만, 남의 계획은 404)
+  const access = await authorizePlan(supabase, auth.user, plan_id, "write", "POST /api/plans/[plan_id]/todos");
+  if (!access.ok) return access.response;
 
   const { data, error } = await supabase
     .from("todos")
