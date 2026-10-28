@@ -3,7 +3,7 @@
 계획(Plan)을 세우고, 할 일을 실행(Do)하고, 결과를 확인(See)하는 다이어리의 백엔드 API입니다.
 Next.js(App Router Route Handlers) + TypeScript + Supabase(PostgreSQL)로 만들었고 Vercel에 배포합니다.
 
-> 계획 목록·상세, 할 일, 실행 타이머, 결과 요약 화면이 있고, 이메일 가입·로그인(Supabase Auth)이 붙어 있습니다. 인증 방식과 설정은 [`docs/auth.md`](docs/auth.md)를 봅니다.
+> 계획 목록·상세, 할 일, 실행 타이머, 결과 요약 화면이 있고, 이메일 가입·로그인(Supabase Auth)이 붙어 있습니다. 인증 방식과 설정은 [`docs/auth.md`](docs/auth.md), 과제 7 제출 설명은 [`docs/assignment-7.md`](docs/assignment-7.md)를 봅니다.
 
 ## 실행하기
 
