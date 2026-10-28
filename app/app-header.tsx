@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { logout } from "@/app/auth/actions";
 import { secondaryButton } from "@/app/ui-classes";
 
@@ -6,6 +7,9 @@ export default function AppHeader({ email }: { email: string | null }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-end gap-3 text-sm">
       {email && <span className="text-muted break-all">{email}</span>}
+      <Link href="/account" className={secondaryButton}>
+        계정
+      </Link>
       <form action={logout}>
         <button type="submit" className={secondaryButton}>
           로그아웃
