@@ -88,8 +88,13 @@ try {
   r = await request("GET", "/login");
   check("로그인 화면(/login)은 열리고 비공개 항목이 없다", r.status === 200 && leaked(r.text).length === 0, `${r.status} ${leaked(r.text).join(", ")}`);
 
+  r = await request("GET", "/plans");
+  check("기존 동작 유지: 비로그인 /plans(계획 대시보드, 예전의 /)는 로그인 화면으로 이동", [307, 308].includes(r.status) && (r.res.headers.get("location") ?? "").endsWith("/login"), String(r.status));
+  check("그 이동 응답에 비공개 항목이 없다", leaked(r.text).length === 0, leaked(r.text).join(", "));
+
   r = await request("GET", "/");
-  check("기존 동작 유지: 비로그인 / 는 로그인 화면으로 이동", [307, 308].includes(r.status) && (r.res.headers.get("location") ?? "").endsWith("/login"), String(r.status));
+  check("비로그인 / 는 로그인으로 이동하지 않고 공개 소개 페이지(200)를 보여 준다", r.status === 200 && r.text.includes("PLAN · DO · SEE") && r.text.includes("공개 영역"), `${r.status}`);
+  check("공개 소개 페이지(/) HTML에 비공개 항목이 없다", leaked(r.text).length === 0, leaked(r.text).join(", "));
 
   r = await request("GET", "/api/plans");
   check("기존 동작 유지: 비로그인 GET /api/plans 는 401", r.status === 401, String(r.status));
