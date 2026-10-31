@@ -51,7 +51,7 @@ export async function login(_previous: AuthFormState, formData: FormData): Promi
   }
 
   // redirect()는 예외로 동작하므로 try/catch 밖에서 호출한다.
-  redirect("/");
+  redirect("/plans");
 }
 
 export async function signup(_previous: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -98,7 +98,7 @@ export async function signup(_previous: AuthFormState, formData: FormData): Prom
 
   // 프로젝트 설정에서 이메일 확인이 꺼져 있으면 가입과 동시에 로그인된다.
   if (data.session) {
-    redirect("/");
+    redirect("/plans");
   }
 
   return { notice: SIGNUP_NOTICE };

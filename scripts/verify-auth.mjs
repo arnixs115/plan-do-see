@@ -75,7 +75,7 @@ try {
   r = await api("GET", "/api/plans", { cookie: "sb-garbage-auth-token=garbage" });
   check("엉터리 세션 쿠키는 401", r.status === 401, String(r.status));
 
-  for (const path of ["/", `/plans/${P}`]) {
+  for (const path of ["/plans", `/plans/${P}`]) {
     r = await api("GET", path);
     const loc = r.res.headers.get("location") ?? "";
     check(`비로그인 ${path} 은 로그인 화면으로 이동(307)`, [307, 308].includes(r.status) && loc.endsWith("/login"), `${r.status} ${loc}`);

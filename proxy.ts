@@ -10,9 +10,12 @@ import { hardenCookieOptions } from "@/lib/auth/cookie-options";
 //  * 세션 확인은 getClaims() 로 한다. 만료가 가까우면 토큰을 새로 받아 쿠키에 다시 쓴다.
 //  * /api 는 이 파일의 대상이 아니다. API는 requireUser 가 직접 401 을 돌려준다.
 
+// "/" 는 공개 소개 페이지(과제 8)라서 정확히 "/" 일 때만 공개다. ("/" 로 시작하는 모든 주소를 공개로 만들면 안 된다)
 const PUBLIC_PATHS = ["/login", "/signup", "/auth/confirm"];
 
 function isPublic(pathname: string) {
+  if (pathname === "/") return true;
+
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 

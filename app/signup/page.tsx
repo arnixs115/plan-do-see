@@ -5,7 +5,7 @@ import SignupForm from "./signup-form";
 
 export default async function SignupPage() {
   if (await getCurrentUser()) {
-    redirect("/");
+    redirect("/plans");
   }
 
   return (

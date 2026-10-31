@@ -7,6 +7,9 @@ export default function AppHeader({ email }: { email: string | null }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-end gap-3 text-sm">
       {email && <span className="text-muted break-all">{email}</span>}
+      <Link href="/" className={secondaryButton}>
+        소개 페이지
+      </Link>
       <Link href="/private" className={secondaryButton}>
         비공개 영역
       </Link>

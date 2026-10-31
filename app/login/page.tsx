@@ -6,7 +6,7 @@ import LoginForm from "./login-form";
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   // 이미 로그인했다면 로그인 화면을 보여 주지 않는다.
   if (await getCurrentUser()) {
-    redirect("/");
+    redirect("/plans");
   }
 
   const params = await searchParams;

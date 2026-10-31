@@ -30,7 +30,7 @@ export default async function PrivatePage() {
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <AppHeader email={null} />
 
-      <Link href="/" className="text-sm text-muted hover:underline">
+      <Link href="/plans" className="text-sm text-muted hover:underline">
         계획 목록으로
       </Link>
 

@@ -18,7 +18,7 @@ export default async function PlanPage({ params }: PageProps<"/plans/[plan_id]">
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <AppHeader email={user.email} />
 
-      <Link href="/" className="text-sm text-muted hover:underline">
+      <Link href="/plans" className="text-sm text-muted hover:underline">
         계획 목록으로
       </Link>
 
