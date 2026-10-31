@@ -15,6 +15,7 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 | 20261021030000 | `link_todo_status_to_execution` | `start_execution`이 할 일 상태를 `in_progress`로, `end_execution`이 `completed`로 바꾸도록 두 함수를 교체 (일시 정지·재개와 재요청은 상태를 건드리지 않음) |
 | 20261022060000 | `add_plan_owner_and_admins` | `plans.user_id`(소유자, `auth.users`와 연결, 사용자 삭제 시 함께 삭제), `plans.is_example`(모든 사용자에게 읽기 전용으로 보이는 예시 표시), admin 목록 테이블 `admins` |
 | 20261022060100 | `convert_legacy_plans_to_examples` | 기존 시험 계획 3개 삭제, 남긴 1개를 예시로 전환, 제약 `plans_owner_or_example_check`(소유자가 없는 계획은 예시뿐) |
+| 20261030100000 | `add_passkeys` | 패스키 등록(카드 2): 표 `passkey_credentials`(credential ID·공개 키 등, 개인 키 열 없음)와 `passkey_registration_challenges`(일회용·5분 만료 챌린지), 함수 `create_registration_challenge` / `consume_registration_challenge`. 기존 표는 건드리지 않는 추가 변경 |
 
 ## 사용 규칙
 
@@ -29,6 +30,7 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 
 적용이 아니라 **점검**용 SQL입니다. 읽기 전용(SELECT만)이고 SQL Editor에서 직접 실행합니다.
 
+- `passkey-registration.sql`: 패스키 표 점검(카드 2). 열 구성, 개인 키처럼 보이는 열이 없는지, 브라우저 키의 접근 권한이 없는지, 개수·공개 키 길이를 보여 주며 키 값은 출력하지 않습니다.
 - `password-storage.sql`: 비밀번호 저장 상태 점검(카드 2). `auth.users`의 해시 형식·동일 비밀번호 두 계정 비교를 true/false와 개수로만 보여 주며, 해시와 비밀번호는 출력하지 않습니다.
 
 ## manual/
