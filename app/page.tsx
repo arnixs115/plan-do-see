@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth/require-user";
 import { primaryButton, secondaryButton } from "./ui-classes";
 
 // 공개 소개 페이지. 첫 화면이다. (과제 8 카드 1)
 //  * 이 웹 서비스(Plan-Do-See Diary)가 무엇이고 무엇을 할 수 있는지 소개한다. 사람(만든 이)을 소개하는 페이지가 아니다.
-//  * 로그인 없이 누구나 볼 수 있다. proxy.ts 의 공개 경로에 정확히 "/" 만 들어 있고, 이 파일은 로그인 확인도 DB 조회도 하지 않는다.
+//  * 로그인 없이 누구나 볼 수 있다. proxy.ts 의 공개 경로에 정확히 "/" 만 들어 있고, 이 파일은 DB 조회를 하지 않는다.
+//  * 로그인 여부는 버튼 모양을 정하는 데만 쓴다. 비로그인이면 "로그인/가입하기", 로그인했으면 "내 계획 보기(/plans)".
+//    이메일 등 계정 정보는 화면에 쓰지 않고, 확인에 실패하면 비로그인으로 본다.
 //  * 적힌 기능은 실제로 화면·API 에 있는 것만 쓴다. (README 의 API 표, app/plans/[plan_id]/* 화면 코드에서 확인)
 //    아직 없는 기능(패스키 등)은 적지 않는다.
 //  * 개인 정보·연락처·계정 식별 정보·비공개 항목은 넣지 않는다. 비공개 자료는 로그인해야 열리는 /private 에만 있다.
@@ -50,7 +53,9 @@ const steps = [
   },
 ] as const;
 
-export default function IntroPage() {
+export default async function IntroPage() {
+  const signedIn = (await getCurrentUser()) !== null;
+
   return (
     <>
       {/* 공개 영역 표시 */}
@@ -61,9 +66,15 @@ export default function IntroPage() {
             로그인 없이 누구나 볼 수 있는 소개 페이지입니다.
           </p>
           <nav aria-label="사이트 이동" className="flex gap-4 font-semibold">
-            <Link href="/login" className="underline underline-offset-[3px]">
-              로그인
-            </Link>
+            {signedIn ? (
+              <Link href="/plans" className="underline underline-offset-[3px]">
+                내 계획
+              </Link>
+            ) : (
+              <Link href="/login" className="underline underline-offset-[3px]">
+                로그인
+              </Link>
+            )}
             <Link href="/private" className="underline underline-offset-[3px]">
               비공개 영역
             </Link>
@@ -77,12 +88,20 @@ export default function IntroPage() {
             Plan-Do-See Diary
           </a>
           <div className="flex items-center gap-2">
-            <Link href="/login" className={secondaryButton}>
-              로그인
-            </Link>
-            <Link href="/signup" className={`${primaryButton} text-sm`}>
-              가입하기
-            </Link>
+            {signedIn ? (
+              <Link href="/plans" className={`${primaryButton} text-sm`}>
+                내 계획 보기
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className={secondaryButton}>
+                  로그인
+                </Link>
+                <Link href="/signup" className={`${primaryButton} text-sm`}>
+                  가입하기
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -101,12 +120,20 @@ export default function IntroPage() {
             계획이 실제로 얼마나 걸렸는지 눈으로 보면서 다음 계획을 세울 수 있습니다.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Link href="/signup" className={`${primaryButton} inline-block`}>
-              가입하고 시작하기
-            </Link>
-            <Link href="/login" className={`${secondaryButton} inline-block py-2`}>
-              이미 계정이 있어요
-            </Link>
+            {signedIn ? (
+              <Link href="/plans" className={`${primaryButton} inline-block`}>
+                내 계획 보기
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup" className={`${primaryButton} inline-block`}>
+                  가입하고 시작하기
+                </Link>
+                <Link href="/login" className={`${secondaryButton} inline-block py-2`}>
+                  이미 계정이 있어요
+                </Link>
+              </>
+            )}
           </div>
         </section>
 
