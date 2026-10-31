@@ -1,4 +1,4 @@
-// 패스키 등록(과제 8 카드 2) 서버 쪽 확인 스크립트. 브라우저 패스키 창이 필요한 부분(실제 등록)은 하지 않는다. (docs/passkey-registration.md 의 수동 절차)
+// 패스키 등록(카드 2)·로그인(카드 3) 서버 쪽 확인 스크립트. 브라우저 패스키 창이 필요한 부분(실제 등록·로그인)은 하지 않는다. (docs/passkey-registration.md, docs/passkey-login.md 의 수동 절차)
 //
 // 사용법:  npm run dev (또는 build 후 start) 를 띄운 뒤
 //   (A) 로그인 없이:           node scripts/verify-passkey.mjs [http://localhost:3000]
@@ -40,6 +40,21 @@ check("비로그인 POST /api/passkeys/register/verify 는 401", a3.status === 4
 check("그 응답들에 passkeys/options/challenge 가 없다", ![a1, a2, a3].some((r) => /passkeys"|challenge/.test(JSON.stringify(r.json))), "");
 const badToken = await call("GET", "/api/passkeys", { token: "not-a-real-token" });
 check("엉터리 Bearer 토큰은 401", badToken.status === 401, badToken.status);
+
+// ---- 카드 3: 로그인 API (로그인 없이 되는 시험) ----
+const l1 = await call("POST", "/api/passkeys/login/options", { body: {} });
+const l2 = await call("POST", "/api/passkeys/login/options", { body: {} });
+check("로그인 시작 2번 모두 200", l1.status === 200 && l2.status === 200, `${l1.status}/${l2.status}`);
+check("두 로그인 챌린지와 challenge_id 가 서로 다르다", Boolean(l1.json?.options?.challenge) && l1.json.options.challenge !== l2.json?.options?.challenge && l1.json.challenge_id !== l2.json?.challenge_id, "");
+check("로그인 옵션에 계정 지정(allowCredentials)이 없고 사용자 확인을 요구한다", !l1.json?.options?.allowCredentials && l1.json?.options?.userVerification === "required", "");
+const lv = await call("POST", "/api/passkeys/login/verify", { body: { challenge_id: nilUuid, response: { id: "x", rawId: "x", type: "public-key", response: { clientDataJSON: "x", authenticatorData: "x", signature: "x" } } } });
+check("모르는 challenge_id 로 로그인 검증하면 400", lv.status === 400, lv.status);
+const lbad = await call("POST", "/api/passkeys/login/verify", { body: { challenge_id: "nope", response: {} } });
+check("형식이 틀린 로그인 검증 요청은 400", lbad.status === 400, lbad.status);
+const priv = await call("GET", "/api/private-items");
+check("로그인 없이 GET /api/private-items 는 401", priv.status === 401, priv.status);
+const outRes = await fetch(BASE + "/api/auth/logout", { method: "POST" });
+check("로그인 없이 POST /api/auth/logout 는 204 (멱등)", outRes.status === 204, outRes.status);
 
 if (SB_URL && SB_KEY && TEST_EMAIL && TEST_PASSWORD) {
   const login = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {

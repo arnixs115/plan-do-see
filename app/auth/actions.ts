@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAuthClient } from "@/lib/auth/client";
 import type { AuthFormState } from "@/lib/auth/types";
@@ -102,26 +102,4 @@ export async function signup(_previous: AuthFormState, formData: FormData): Prom
   }
 
   return { notice: SIGNUP_NOTICE };
-}
-
-export async function logout() {
-  const supabase = await createAuthClient();
-
-  // 이 기기의 세션만 서버에서 폐기한다. (scope: local)
-  // 실패하더라도(이미 만료된 세션 등) 브라우저의 로그인 쿠키는 아래에서 반드시 지운다.
-  try {
-    await supabase.auth.signOut({ scope: "local" });
-  } catch {
-    // 아래 쿠키 삭제로 계속 진행한다.
-  }
-
-  const cookieStore = await cookies();
-
-  for (const cookie of cookieStore.getAll()) {
-    if (cookie.name.startsWith("sb-")) {
-      cookieStore.delete(cookie.name);
-    }
-  }
-
-  redirect("/login");
 }

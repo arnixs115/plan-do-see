@@ -105,3 +105,62 @@ export async function insertPasskey(input: NewPasskey): Promise<{ data: PasskeyV
 
   return { data: data as PasskeyView | null, error };
 }
+
+// ---- 로그인(카드 3) ----
+
+// 로그인용 챌린지를 저장한다. 누구인지는 아직 모르므로 사용자와 묶이지 않는다. 만료 시각은 DB가 정한다.
+export async function createLoginChallenge(
+  challenge: string
+): Promise<{ data: { challenge_id: string; expires_at: string } | null; error: DbError }> {
+  const { data, error } = await getSupabaseAdmin().rpc("create_login_challenge", { p_challenge: challenge });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  return {
+    data: row ? { challenge_id: row.challenge_id, expires_at: row.challenge_expires_at } : null,
+    error,
+  };
+}
+
+// 로그인 챌린지를 원자적으로 소비하고 내용을 가져온다. 없는 id·이미 씀·만료는 모두 data 가 null 이다.
+export async function consumeLoginChallenge(
+  challengeId: string
+): Promise<{ data: { challenge: string } | null; error: DbError }> {
+  const { data, error } = await getSupabaseAdmin().rpc("consume_login_challenge", { p_challenge_id: challengeId });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  return { data: row ? { challenge: row.challenge_value } : null, error };
+}
+
+export type StoredCredential = {
+  credential_id: string;
+  user_id: string;
+  public_key: string;
+  counter: number;
+  transports: string[];
+};
+
+// 브라우저가 알려 준 credential ID 로 저장된 패스키를 찾는다. (사용자 id 는 요청에서 받지 않고 여기서 나온다)
+export async function findCredentialById(
+  credentialId: string
+): Promise<{ data: StoredCredential | null; error: DbError }> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("passkey_credentials")
+    .select("credential_id, user_id, public_key, counter, transports")
+    .eq("credential_id", credentialId);
+
+  return { data: data && data.length === 1 ? (data[0] as StoredCredential) : null, error };
+}
+
+// 인증에 성공한 패스키의 카운터·마지막 사용 시각을 기록하고 소유자 id 를 돌려준다. 카운터가 올라가지 않았으면 data 가 null.
+export async function recordPasskeyAuthentication(
+  credentialId: string,
+  newCounter: number
+): Promise<{ data: { user_id: string } | null; error: DbError }> {
+  const { data, error } = await getSupabaseAdmin().rpc("record_passkey_authentication", {
+    p_credential_id: credentialId,
+    p_new_counter: newCounter,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  return { data: row ? { user_id: row.owner_id } : null, error };
+}

@@ -68,6 +68,11 @@ export async function proxy(request: NextRequest) {
     return redirect;
   }
 
+  // 로그인해야 보이는 화면은 브라우저·중간 서버가 저장하지 않게 한다. (로그아웃 뒤 뒤로 가기·새로고침으로 옛 화면이 그대로 보이는 것을 막음)
+  if (!isPublic(pathname)) {
+    response.headers.set("Cache-Control", "no-store");
+  }
+
   return response;
 }
 

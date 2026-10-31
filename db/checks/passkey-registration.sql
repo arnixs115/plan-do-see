@@ -48,3 +48,22 @@ select
   count(*) filter (where consumed_at is not null)                     as consumed,
   count(*) filter (where consumed_at is null and expires_at <= now()) as expired_unused
 from public.passkey_registration_challenges;
+
+-- 7) (카드 3) 로그인 챌린지 상태: 대기 중 / 사용됨 / 만료됨. 챌린지 값 자체는 출력하지 않는다.
+select
+  count(*) filter (where consumed_at is null and expires_at > now())  as pending,
+  count(*) filter (where consumed_at is not null)                     as consumed,
+  count(*) filter (where consumed_at is null and expires_at <= now()) as expired_unused
+from public.passkey_login_challenges;
+
+-- 8) (카드 3) 로그인에 쓰인 패스키: 마지막 사용 시각과 카운터만 본다. (공개 키·credential ID 는 출력하지 않는다)
+select name, last_used_at, counter
+from public.passkey_credentials
+order by last_used_at desc nulls last;
+
+-- 9) (카드 3) 로그인 챌린지 표·함수의 접근 권한: 브라우저용 역할(anon, authenticated)은 모두 false 여야 한다.
+select
+  has_table_privilege('anon', 'public.passkey_login_challenges', 'select')         as anon_select,
+  has_table_privilege('authenticated', 'public.passkey_login_challenges', 'select') as authenticated_select,
+  has_function_privilege('anon', 'public.consume_login_challenge(uuid)', 'execute')          as anon_exec_consume,
+  has_function_privilege('authenticated', 'public.record_passkey_authentication(text, bigint)', 'execute') as authenticated_exec_record;

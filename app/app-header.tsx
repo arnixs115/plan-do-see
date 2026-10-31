@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { logout } from "@/app/auth/actions";
+import BackForwardGuard from "@/app/back-forward-guard";
 import { secondaryButton } from "@/app/ui-classes";
 
 // 로그인한 상태에서 모든 화면 위에 보이는 줄: 누구로 로그인했는지 + 로그아웃
 export default function AppHeader({ email }: { email: string | null }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-end gap-3 text-sm">
+      <BackForwardGuard />
       {email && <span className="text-muted break-all">{email}</span>}
       <Link href="/" className={secondaryButton}>
         소개 페이지
@@ -16,7 +17,7 @@ export default function AppHeader({ email }: { email: string | null }) {
       <Link href="/account" className={secondaryButton}>
         계정
       </Link>
-      <form action={logout}>
+      <form action="/api/auth/logout" method="post">
         <button type="submit" className={secondaryButton}>
           로그아웃
         </button>

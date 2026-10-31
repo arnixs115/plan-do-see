@@ -76,3 +76,38 @@ export function isRegistrationResponseShape(value: unknown): boolean {
     isNonEmptyString(inner.attestationObject, 65536)
   );
 }
+
+// 브라우저가 보낸 로그인 결과(AuthenticationResponseJSON)의 최소한의 모양 검사.
+// 암호학적 검증은 하지 않는다. 그것은 @simplewebauthn/server 의 verifyAuthenticationResponse 가 한다.
+export function isAuthenticationResponseShape(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+
+  const v = value as Record<string, unknown>;
+  const inner = v.response as Record<string, unknown> | null | undefined;
+
+  return (
+    isNonEmptyString(v.id, 1024) &&
+    isNonEmptyString(v.rawId, 1024) &&
+    v.type === "public-key" &&
+    typeof inner === "object" &&
+    inner !== null &&
+    !Array.isArray(inner) &&
+    isNonEmptyString(inner.clientDataJSON, 8192) &&
+    isNonEmptyString(inner.authenticatorData, 4096) &&
+    isNonEmptyString(inner.signature, 4096) &&
+    (inner.userHandle === undefined || inner.userHandle === null || isNonEmptyString(inner.userHandle, 1024))
+  );
+}
+
+// 인증기가 알려 준 userHandle(base64url)이 이 패스키 소유자의 계정 id 와 같은지 본다.
+// 등록할 때 userHandle 을 계정 id(UUID 문자열)의 UTF-8 바이트로 만들었다. 값이 없으면(인증기가 안 보낸 경우) 비교할 수 없으므로 통과시킨다.
+// 값이 있는데 다르면 거절한다. (브라우저가 보낸 값을 사용자 확인에 쓰는 것이 아니라, 서버가 저장해 둔 소유자와 어긋나지 않는지 확인하는 용도)
+export function userHandleMatches(userHandleBase64url: string | null | undefined, expectedUserId: string): boolean {
+  if (userHandleBase64url === null || userHandleBase64url === undefined || userHandleBase64url === "") return true;
+
+  try {
+    return Buffer.from(userHandleBase64url, "base64url").toString("utf8") === expectedUserId;
+  } catch {
+    return false;
+  }
+}

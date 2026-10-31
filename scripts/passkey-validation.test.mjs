@@ -8,7 +8,11 @@ import {
   originHeaderAllowed,
   isUniqueViolation,
   isRegistrationResponseShape,
+  isAuthenticationResponseShape,
+  userHandleMatches,
 } from "../lib/passkeys/validation.ts";
+
+import { hardenCookieOptions, SESSION_COOKIE_MAX_AGE_SECONDS } from "../lib/auth/cookie-options.ts";
 
 const PROD = { WEBAUTHN_ORIGIN: "https://plan-do-see-silk.vercel.app", WEBAUTHN_RP_ID: "plan-do-see-silk.vercel.app" };
 
@@ -73,4 +77,36 @@ test("등록 결과 모양 검사", () => {
   assert.equal(isRegistrationResponseShape({ ...ok, response: {} }), false);
   assert.equal(isRegistrationResponseShape(null), false);
   assert.equal(isRegistrationResponseShape("x"), false);
+});
+
+test("로그인 결과 모양 검사", () => {
+  const ok = { id: "a", rawId: "a", type: "public-key", response: { clientDataJSON: "x", authenticatorData: "x", signature: "x" } };
+  assert.equal(isAuthenticationResponseShape(ok), true);
+  assert.equal(isAuthenticationResponseShape({ ...ok, response: { ...ok.response, userHandle: "dQ" } }), true);
+  assert.equal(isAuthenticationResponseShape({ ...ok, response: { ...ok.response, userHandle: "" } }), false);
+  assert.equal(isAuthenticationResponseShape({ ...ok, type: "password" }), false);
+  assert.equal(isAuthenticationResponseShape({ ...ok, response: { clientDataJSON: "x", authenticatorData: "x" } }), false);
+  assert.equal(isAuthenticationResponseShape(null), false);
+  assert.equal(isAuthenticationResponseShape([]), false);
+  assert.equal(isAuthenticationResponseShape({ ...ok, id: "a".repeat(1025) }), false);
+});
+
+test("userHandle: 저장된 소유자 id 와 같아야 통과, 없으면 비교하지 않음", () => {
+  const uid = "11111111-1111-4111-8111-111111111111";
+  const handle = Buffer.from(uid, "utf8").toString("base64url");
+  assert.equal(userHandleMatches(handle, uid), true);
+  assert.equal(userHandleMatches(handle, "22222222-2222-4222-8222-222222222222"), false);
+  assert.equal(userHandleMatches(undefined, uid), true);
+  assert.equal(userHandleMatches(null, uid), true);
+  assert.equal(userHandleMatches(Buffer.from("not-the-id").toString("base64url"), uid), false);
+});
+
+test("로그인 쿠키: httpOnly, 수명은 7일 이하로 제한, 삭제(maxAge 0)는 그대로", () => {
+  const long = hardenCookieOptions({ path: "/", maxAge: 400 * 24 * 60 * 60, sameSite: "lax" });
+  assert.equal(long.httpOnly, true);
+  assert.equal(long.maxAge, SESSION_COOKIE_MAX_AGE_SECONDS);
+  assert.equal(long.sameSite, "lax");
+  assert.equal(hardenCookieOptions({ maxAge: 0 }).maxAge, 0);
+  assert.equal(hardenCookieOptions({ maxAge: 60 }).maxAge, 60);
+  assert.equal(hardenCookieOptions({ path: "/" }).maxAge, undefined);
 });

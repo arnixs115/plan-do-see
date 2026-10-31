@@ -31,7 +31,7 @@ npm run dev                  # http://localhost:3000
 
 | 영역 | 메서드와 경로 |
 |---|---|
-| Passkey | `GET /api/passkeys`(내 패스키 목록), `POST /api/passkeys/register/options`(등록 시작·챌린지 발급), `POST /api/passkeys/register/verify`(등록 결과 검증·공개 키 저장) |
+| Passkey | `GET /api/passkeys`(내 패스키 목록), `POST /api/passkeys/register/options`(등록 시작·챌린지 발급), `POST /api/passkeys/register/verify`(등록 결과 검증·공개 키 저장), `POST /api/passkeys/login/options`(로그인 시작·챌린지 발급), `POST /api/passkeys/login/verify`(서명 검증 후 세션 발급), `POST /api/auth/logout`(세션 폐기) |
 | Plan | `GET /api/plans`, `POST /api/plans` |
 | | `GET /api/plans/{plan_id}`, `PATCH /api/plans/{plan_id}` (수정 전 내용을 revision으로 보존) |
 | Todo | `GET /api/plans/{plan_id}/todos`, `POST /api/plans/{plan_id}/todos` |

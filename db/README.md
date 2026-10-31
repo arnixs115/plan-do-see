@@ -16,6 +16,7 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 | 20261022060000 | `add_plan_owner_and_admins` | `plans.user_id`(소유자, `auth.users`와 연결, 사용자 삭제 시 함께 삭제), `plans.is_example`(모든 사용자에게 읽기 전용으로 보이는 예시 표시), admin 목록 테이블 `admins` |
 | 20261022060100 | `convert_legacy_plans_to_examples` | 기존 시험 계획 3개 삭제, 남긴 1개를 예시로 전환, 제약 `plans_owner_or_example_check`(소유자가 없는 계획은 예시뿐) |
 | 20261030100000 | `add_passkeys` | 패스키 등록(카드 2): 표 `passkey_credentials`(credential ID·공개 키 등, 개인 키 열 없음)와 `passkey_registration_challenges`(일회용·5분 만료 챌린지), 함수 `create_registration_challenge` / `consume_registration_challenge`. 기존 표는 건드리지 않는 추가 변경 |
+| 20261031120000 | `add_passkey_login` | 패스키 로그인(카드 3): 표 `passkey_login_challenges`(일회용·5분 만료 챌린지), 함수 `create_login_challenge`·`consume_login_challenge`·`record_passkey_authentication`(카운터가 올라갔을 때만 기록). 기존 표는 건드리지 않음 |
 
 ## 사용 규칙
 

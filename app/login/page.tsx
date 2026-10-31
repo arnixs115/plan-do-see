@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/require-user";
 import LoginForm from "./login-form";
+import PasskeyLoginButton from "./passkey-login-button";
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   // 이미 로그인했다면 로그인 화면을 보여 주지 않는다.
@@ -21,6 +22,14 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <p className="mt-2 mb-8 text-muted">로그인하고 내 계획을 이어서 보세요.</p>
 
       <LoginForm notice={notice} />
+
+      <div className="my-6 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+        <span className="h-px flex-1 bg-line" />
+        또는
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
+      <PasskeyLoginButton />
 
       <p className="mt-6 text-sm text-muted">
         계정이 없나요?{" "}
