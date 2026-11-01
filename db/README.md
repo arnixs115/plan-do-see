@@ -17,6 +17,8 @@ Supabase(PostgreSQL)에 적용한 SQL을 모아 두는 폴더입니다.
 | 20261022060100 | `convert_legacy_plans_to_examples` | 기존 시험 계획 3개 삭제, 남긴 1개를 예시로 전환, 제약 `plans_owner_or_example_check`(소유자가 없는 계획은 예시뿐) |
 | 20261030100000 | `add_passkeys` | 패스키 등록(카드 2): 표 `passkey_credentials`(credential ID·공개 키 등, 개인 키 열 없음)와 `passkey_registration_challenges`(일회용·5분 만료 챌린지), 함수 `create_registration_challenge` / `consume_registration_challenge`. 기존 표는 건드리지 않는 추가 변경 |
 | 20261031120000 | `add_passkey_login` | 패스키 로그인(카드 3): 표 `passkey_login_challenges`(일회용·5분 만료 챌린지), 함수 `create_login_challenge`·`consume_login_challenge`·`record_passkey_authentication`(카운터가 올라갔을 때만 기록). 기존 표는 건드리지 않음 |
+| 20261101100000 | `add_delete_passkey` | 패스키 개별 삭제(카드 4): 함수 `delete_passkey`(소유자 확인·마지막 패스키 확인·삭제를 한 번에, 같은 사용자의 행을 잠가 동시 삭제로 0개가 되는 것을 막음). 표는 바꾸지 않음 |
+| 20261102100000 | `add_private_items` | 계정 간 격리(카드 5): 표 `private_items`(소유자 `user_id`, `unique(user_id, slot)`, RLS 활성·anon/authenticated 권한 없음)와 함수 `ensure_private_items`(그 계정의 가상 항목 3개를 없을 때만 채움, 여러 번·동시에 불러도 안전). 기존 표는 건드리지 않는 추가 변경 |
 
 ## 사용 규칙
 

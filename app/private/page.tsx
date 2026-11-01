@@ -24,7 +24,9 @@ export default async function PrivatePage() {
     redirect("/login");
   }
 
-  const items = listPrivateItems(user);
+  // 내 항목만 읽는다. (소유자 조건은 lib/private/items.ts 가 건다)
+  const result = await listPrivateItems(user);
+  const items = result.data;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
@@ -49,19 +51,26 @@ export default async function PrivatePage() {
           </p>
         </div>
 
+        {!items ? (
+          <p className="p-5 text-sm" role="alert">
+            비공개 항목을 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.
+          </p>
+        ) : (
         <ul className="space-y-3 p-5">
           {items.map((item) => (
             <li key={item.id} className="rounded-md border border-line bg-surface p-4">
-              <p className="text-xs font-semibold text-muted">{item.kind}</p>
+              <p className="text-xs font-semibold text-muted">
+                {item.kind} · <span data-testid="item-code">{item.code}</span>
+              </p>
               <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
               <p className="mt-2 text-sm text-muted">{item.body}</p>
             </li>
           ))}
         </ul>
+        )}
 
         <p className="border-t border-dashed border-foreground px-5 py-3 text-xs text-muted">
-          지금은 이메일·비밀번호로 로그인한 계정이면 누구나 이 화면을 볼 수 있습니다.
-          &ldquo;나만 들어가기&rdquo;(패스키)는 아직 구현하지 않았습니다.
+          이 화면에는 지금 로그인한 계정의 항목만 나옵니다. 다른 계정의 항목은 서버가 조회하지 않습니다.
         </p>
       </section>
     </main>

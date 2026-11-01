@@ -9,8 +9,16 @@ import type { PasskeyView } from "./types";
 
 type DbError = { code?: string; message?: string } | null;
 
-// 응답으로 내보내도 되는 열. credential_id, public_key, counter 는 화면이 쓸 일이 없어서 내보내지 않는다.
-const VIEW_COLUMNS = "id, name, created_at, last_used_at, device_type, backed_up, aaguid, transports";
+// 응답으로 내보내도 되는 열. credential_id 는 읽어서 "끝 6글자"(표시용 구분 값)만 만들고 전체는 내보내지 않는다. public_key, counter 는 읽지 않는다.
+const VIEW_COLUMNS = "id, name, created_at, last_used_at, device_type, backed_up, aaguid, transports, credential_id";
+
+type ViewRow = Omit<PasskeyView, "credential_hint"> & { credential_id: string };
+
+function toView(row: ViewRow): PasskeyView {
+  const { credential_id: credentialId, ...rest } = row;
+
+  return { ...rest, credential_hint: credentialId.slice(-6) };
+}
 
 export async function listPasskeys(userId: string): Promise<{ data: PasskeyView[] | null; error: DbError }> {
   const { data, error } = await getSupabaseAdmin()
@@ -19,7 +27,7 @@ export async function listPasskeys(userId: string): Promise<{ data: PasskeyView[
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
 
-  return { data: data as PasskeyView[] | null, error };
+  return { data: data ? (data as ViewRow[]).map(toView) : null, error };
 }
 
 // 같은 인증기에 같은 계정의 패스키를 두 번 만들지 않도록, 등록 옵션의 excludeCredentials 에 넣을 목록
@@ -103,7 +111,26 @@ export async function insertPasskey(input: NewPasskey): Promise<{ data: PasskeyV
     .select(VIEW_COLUMNS)
     .single();
 
-  return { data: data as PasskeyView | null, error };
+  return { data: data ? toView(data as ViewRow) : null, error };
+}
+
+// 패스키 하나를 지운다. 사용자 id 는 로그인 세션에서 얻은 값이어야 한다. (DB 함수 delete_passkey: 소유자 확인, 마지막 패스키 확인, 삭제를 한 번에)
+//  - not_found   : 없는 id 이거나 남의 패스키. 구분하지 않는다.
+//  - last_passkey: 마지막 패스키인데 allowLast 가 false
+//  - deleted     : 지움. remaining 은 남은 개수
+export async function deletePasskey(
+  userId: string,
+  passkeyId: string,
+  allowLast: boolean
+): Promise<{ data: { outcome: "deleted" | "not_found" | "last_passkey"; remaining: number } | null; error: DbError }> {
+  const { data, error } = await getSupabaseAdmin().rpc("delete_passkey", {
+    p_user_id: userId,
+    p_passkey_id: passkeyId,
+    p_allow_last: allowLast,
+  });
+  const row = Array.isArray(data) ? data[0] : null;
+
+  return { data: row ? { outcome: row.outcome, remaining: Number(row.remaining) } : null, error };
 }
 
 // ---- 로그인(카드 3) ----

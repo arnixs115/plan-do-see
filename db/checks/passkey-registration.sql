@@ -67,3 +67,14 @@ select
   has_table_privilege('authenticated', 'public.passkey_login_challenges', 'select') as authenticated_select,
   has_function_privilege('anon', 'public.consume_login_challenge(uuid)', 'execute')          as anon_exec_consume,
   has_function_privilege('authenticated', 'public.record_passkey_authentication(text, bigint)', 'execute') as authenticated_exec_record;
+
+-- 10) (카드 4) 사용자별 패스키 개수. 이메일 대신 사용자 id 앞 8자만 본다. 0개인 사용자는 이 표에 나오지 않는다.
+select left(user_id::text, 8) as user_prefix, count(*) as passkeys, count(distinct credential_id) as distinct_credentials
+from public.passkey_credentials
+group by user_id
+order by passkeys desc;
+
+-- 11) (카드 4) 삭제 함수의 접근 권한: 브라우저용 역할은 모두 false 여야 한다.
+select
+  has_function_privilege('anon', 'public.delete_passkey(uuid, uuid, boolean)', 'execute')          as anon_exec_delete,
+  has_function_privilege('authenticated', 'public.delete_passkey(uuid, uuid, boolean)', 'execute') as authenticated_exec_delete;

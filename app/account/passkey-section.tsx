@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { api, ApiError } from "@/lib/api-client";
-import { inputClass, primaryButton } from "@/app/ui-classes";
+import { dangerButton, inputClass, primaryButton, secondaryButton } from "@/app/ui-classes";
 import type { PasskeyView } from "@/lib/passkeys/types";
 
 type Props = {
@@ -49,6 +49,35 @@ export default function PasskeySection({ initialPasskeys, loadError }: Props) {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const busy = status !== "idle";
+
+  // 삭제: 이름을 보여 주며 확인을 받은 뒤 서버에 요청한다. 서버가 로그인한 사용자의 패스키인지 확인하고 지운다.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function onDelete(passkey: PasskeyView) {
+    setMessage(null);
+    setDeletingId(passkey.id);
+
+    // 마지막 패스키는 서버가 ?confirm_last=1 이 있어야 지운다. 이 확인은 아래 안내 문구를 본 뒤 눌렀을 때만 보낸다.
+    const isLast = passkeys.length === 1;
+
+    try {
+      await api<{ deleted: boolean; remaining: number }>(`/api/passkeys/${passkey.id}${isLast ? "?confirm_last=1" : ""}`, {
+        method: "DELETE",
+      });
+
+      setPasskeys((current) => current.filter((item) => item.id !== passkey.id));
+      setMessage({
+        kind: "ok",
+        text: `패스키 "${passkey.name}"을(를) 서버에서 삭제했습니다. 기기나 패스키 관리자에 저장된 패스키는 그대로이니 필요하면 직접 지우세요.`,
+      });
+    } catch (caught) {
+      setMessage({ kind: "error", text: caught instanceof ApiError ? caught.message : "패스키를 삭제하지 못했습니다." });
+    } finally {
+      setDeletingId(null);
+      setConfirmingId(null);
+    }
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,19 +166,72 @@ export default function PasskeySection({ initialPasskeys, loadError }: Props) {
       </form>
 
       <h3 className="mt-6 text-sm font-semibold">등록된 패스키</h3>
+      <p className="mt-1 text-xs text-muted">
+        이름은 구분하기 위한 표시용이며 패스키가 실제로 저장된 기기나 제공자를 뜻하지 않습니다. 동기화되는 패스키는 여러 기기에서 쓰일 수 있습니다.
+        다른 기기나 제공자의 패스키를 더 등록하려면 그 기기에서 이 화면을 열어 등록하세요.
+      </p>
 
       {loadError ? (
         <p role="alert" className="mt-2 text-sm text-danger">
           {loadError}
         </p>
       ) : passkeys.length === 0 ? (
-        <p className="mt-2 text-sm text-muted">아직 등록한 패스키가 없습니다.</p>
+        <p className="mt-2 text-sm text-muted">
+          아직 등록한 패스키가 없습니다. 패스키 로그인은 패스키를 등록해야 쓸 수 있고, 지금은 이메일과 비밀번호로 로그인합니다.
+        </p>
       ) : (
         <ul className="mt-2 divide-y divide-line text-sm">
           {passkeys.map((passkey) => (
-            <li key={passkey.id} className="py-2">
-              <span className="font-medium break-all">{passkey.name}</span>
-              <span className="block text-muted">등록: {formatDate(passkey.created_at)}</span>
+            <li key={passkey.id} className="py-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-medium break-all">{passkey.name}</span>
+                  <span className="block text-muted">등록: {formatDate(passkey.created_at)}</span>
+                  <span className="block text-muted">
+                    마지막 로그인: {passkey.last_used_at ? formatDate(passkey.last_used_at) : "아직 없음"}
+                  </span>
+                  <span className="block text-xs text-muted">
+                    구분 번호 …{passkey.credential_hint} ·{" "}
+                    {passkey.device_type === "multiDevice" ? "동기화될 수 있는 패스키" : "한 기기에 묶인 패스키"}
+                  </span>
+                </div>
+
+                {confirmingId !== passkey.id && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingId(passkey.id)}
+                    disabled={deletingId !== null}
+                    className={secondaryButton}
+                    aria-label={`패스키 ${passkey.name} 삭제`}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+
+              {confirmingId === passkey.id && (
+                <div role="alertdialog" aria-label="패스키 삭제 확인" className="mt-3 rounded-md border border-danger p-3">
+                  <p className="m-0 font-medium">패스키 &quot;{passkey.name}&quot;을(를) 삭제할까요?</p>
+                  <p className="mt-1 mb-0 text-muted">
+                    서버에 등록된 이 패스키만 지워지고, 이후 이 패스키로는 로그인할 수 없습니다. 내 기기나 패스키 관리자에 저장된 패스키 자체는
+                    자동으로 지워지지 않으니 필요하면 직접 지우세요.
+                  </p>
+                  {passkeys.length === 1 && (
+                    <p className="mt-2 mb-0 font-medium text-danger">
+                      마지막 패스키입니다. 지우면 패스키로 로그인할 수 없게 됩니다. 이 계정은 이메일과 비밀번호로 계속 로그인할 수 있고,
+                      로그인한 뒤 이 화면에서 패스키를 다시 등록할 수 있습니다. 비밀번호를 모르면 계정에 들어올 방법이 없으니 꼭 확인하세요.
+                    </p>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={() => onDelete(passkey)} disabled={deletingId !== null} className={dangerButton}>
+                      {deletingId === passkey.id ? "삭제 중…" : "삭제 확인"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmingId(null)} disabled={deletingId !== null} className={secondaryButton}>
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>

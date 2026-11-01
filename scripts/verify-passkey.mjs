@@ -1,4 +1,4 @@
-// 패스키 등록(카드 2)·로그인(카드 3) 서버 쪽 확인 스크립트. 브라우저 패스키 창이 필요한 부분(실제 등록·로그인)은 하지 않는다. (docs/passkey-registration.md, docs/passkey-login.md 의 수동 절차)
+// 패스키 등록(카드 2)·로그인(카드 3)·관리·삭제(카드 4) 서버 쪽 확인 스크립트. 브라우저 패스키 창이 필요한 부분(실제 등록·로그인)은 하지 않는다. (docs/passkey-registration.md, docs/passkey-login.md 의 수동 절차)
 //
 // 사용법:  npm run dev (또는 build 후 start) 를 띄운 뒤
 //   (A) 로그인 없이:           node scripts/verify-passkey.mjs [http://localhost:3000]
@@ -51,6 +51,8 @@ const lv = await call("POST", "/api/passkeys/login/verify", { body: { challenge_
 check("모르는 challenge_id 로 로그인 검증하면 400", lv.status === 400, lv.status);
 const lbad = await call("POST", "/api/passkeys/login/verify", { body: { challenge_id: "nope", response: {} } });
 check("형식이 틀린 로그인 검증 요청은 400", lbad.status === 400, lbad.status);
+const delUn = await call("DELETE", `/api/passkeys/${nilUuid}`);
+check("로그인 없이 DELETE /api/passkeys/<id> 는 401", delUn.status === 401, delUn.status);
 const priv = await call("GET", "/api/private-items");
 check("로그인 없이 GET /api/private-items 는 401", priv.status === 401, priv.status);
 const outRes = await fetch(BASE + "/api/auth/logout", { method: "POST" });
@@ -78,6 +80,10 @@ if (SB_URL && SB_KEY && TEST_EMAIL && TEST_PASSWORD) {
 
     const bad = await call("POST", "/api/passkeys/register/verify", { token, body: { challenge_id: nilUuid, response: { id: "x", rawId: "x", type: "public-key", response: { clientDataJSON: "x", attestationObject: "x" } } } });
     check("모르는 challenge_id 로 verify 하면 400", bad.status === 400, bad.status);
+    const delMissing = await call("DELETE", `/api/passkeys/${nilUuid}`, { token });
+    check("없는 패스키 id 삭제 요청은 404 (다른 사람의 패스키도 같은 응답)", delMissing.status === 404, delMissing.status);
+    const delBad = await call("DELETE", "/api/passkeys/not-a-uuid", { token });
+    check("형식이 틀린 패스키 id 삭제 요청은 400", delBad.status === 400, delBad.status);
     const spoof = await call("POST", "/api/passkeys/register/options", { token, body: { name: "x", user_id: nilUuid } });
     check("본문에 user_id 를 넣어도 무시되고(200) 사용자 핸들은 내 계정 값이다", spoof.status === 200 && !JSON.stringify(spoof.json).includes(nilUuid), spoof.status);
   }
